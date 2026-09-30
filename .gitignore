@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# 环境变量与密钥（绝不提交）
+.env
+.env.local
+*.pem
+
+# 索引落盘（运行时数据）
+.indexes/
+*.db
+*.sqlite
+*.sqlite3
+
+# 测试缓存
+.pytest_cache/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

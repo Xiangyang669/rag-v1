@@ -1,0 +1,9 @@
+chromadb
+networkx
+jieba
+langgraph
+fastapi
+uvicorn
+pytest
+openai
+langfuse
