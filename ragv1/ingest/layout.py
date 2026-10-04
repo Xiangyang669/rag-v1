@@ -47,6 +47,18 @@ def has_text_layer(page) -> bool:
     return bool(page.chars)
 
 
+def _field(item, name: str):
+    """按名字取一个版面对象的字段。
+
+    ⚠️ pdfplumber 的各路对象形态不统一：`page.chars` 的元素是 **dict**，
+    `page.images` 也是 dict，而 `find_tables()` 返回的是对象。这里统一兜住，
+    否则「替身写成对象」的单测全绿、一跑真实 PDF 就 AttributeError。
+    """
+    if isinstance(item, dict):
+        return item[name]
+    return getattr(item, name)
+
+
 def _bbox_of(item) -> tuple[float, float, float, float]:
     """取一个版面对象的 bbox。
 
@@ -76,14 +88,14 @@ def _center_inside(box, region_box) -> bool:
 
 def _lines_of(chars) -> list[list]:
     """把字符按 top 聚成行（行内按 x 排序）。"""
-    ordered = sorted(chars, key=lambda c: (float(c.top), float(c.x0)))
+    ordered = sorted(chars, key=lambda c: (float(_field(c, "top")), float(_field(c, "x0"))))
     lines: list[list] = []
     current: list = []
     ref_top = None
     ref_height = 0.0
 
     for ch in ordered:
-        top, bottom = float(ch.top), float(ch.bottom)
+        top, bottom = float(_field(ch, "top")), float(_field(ch, "bottom"))
         height = max(bottom - top, 0.0)
         tol = max(ref_height * _LINE_TOL_RATIO, _LINE_TOL_MIN)
         if not current or abs(top - ref_top) <= tol:
@@ -97,29 +109,41 @@ def _lines_of(chars) -> list[list]:
         lines.append(current)
 
     for line in lines:
-        line.sort(key=lambda c: float(c.x0))
+        line.sort(key=lambda c: float(_field(c, "x0")))
     return lines
 
 
 def _line_text(line) -> str:
-    return "".join(str(c.text) for c in line)
+    return "".join(str(_field(c, "text")) for c in line)
 
 
 def _line_box(line) -> tuple[float, float, float, float]:
     return (
-        min(float(c.x0) for c in line),
-        min(float(c.top) for c in line),
-        max(float(c.x1) for c in line),
-        max(float(c.bottom) for c in line),
+        min(float(_field(c, "x0")) for c in line),
+        min(float(_field(c, "top")) for c in line),
+        max(float(_field(c, "x1")) for c in line),
+        max(float(_field(c, "bottom")) for c in line),
     )
 
 
 def _table_rows_of(table) -> tuple[tuple[str, ...], ...]:
-    """取表格的行列内容。
+    """取表格的行列**文字**。
 
-    pdfplumber 的行是 TableRow（内容在 .cells），替身/简化结构可能直接是序列——
-    两种都要能处理。
+    ⚠️ 必须走 `Table.extract()`。pdfplumber 的 `TableRow.cells` 存的是单元格的
+    **bbox 四元组**，不是文字——拿它当内容会把坐标拼进 chunk。
+    替身/简化结构没有 extract()，此时才退回按序列处理 rows。
     """
+    extract = getattr(table, "extract", None)
+    if callable(extract):
+        try:
+            rows = extract()
+        except Exception:  # noqa: BLE001 —— 抽取失败就走降级，别让整页崩掉
+            rows = None
+        if rows:
+            return tuple(
+                tuple("" if c is None else str(c).strip() for c in row) for row in rows
+            )
+
     rows = []
     for row in getattr(table, "rows", ()) or ():
         cells = getattr(row, "cells", row)

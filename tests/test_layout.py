@@ -32,6 +32,40 @@ class FakePage:
         return self._tables
 
 
+def test_chars_may_be_dicts_like_real_pdfplumber():
+    """pdfplumber 的 `page.chars` 元素是 **dict**，不是带属性的对象。
+
+    替身用对象来写时看不出这个差别——拿真实 PDF 跑就 AttributeError。
+    两种形态都要支持。
+    """
+    page = FakePage(
+        chars=[{"text": "你", "x0": 0, "top": 0, "x1": 10, "bottom": 10}]
+    )
+    regions = analyze_page(page, 1)
+    assert [r.kind for r in regions] == ["text"]
+    assert "你" in regions[0].text
+
+
+def test_table_text_comes_from_extract_not_cells():
+    """pdfplumber 的 `TableRow.cells` 存的是**单元格 bbox**，不是文字。
+
+    取文字必须走 `Table.extract()`——用 `.cells` 会把坐标当成表格内容。
+    """
+    class RealishTable:
+        bbox = (0, 0, 100, 50)
+        rows = [type("R", (), {"cells": [(0, 0, 10, 10), (10, 0, 20, 10)]})()]
+
+        def extract(self):
+            return [["参数", "默认值"], ["k", "10"]]
+
+    page = FakePage(
+        chars=[FakeChar("文", 0, 200, 10, 210)], tables=[RealishTable()]
+    )
+    regions = analyze_page(page, 1)
+    table = next(r for r in regions if r.kind == "table")
+    assert table.table_rows == (("参数", "默认值"), ("k", "10"))
+
+
 def test_has_text_layer_false_on_scanned_page():
     assert has_text_layer(FakePage(chars=[])) is False
 
