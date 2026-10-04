@@ -71,14 +71,30 @@ def resolve_api_key(env_file: str | Path | None = None) -> str:
     raise RuntimeError(f"没找到 {KEY_NAME}：请设置该环境变量，或在 {tried} 放置 .env 文件")
 
 
-def default_embed_fn() -> Callable[[str], list[float]]:
-    """构造真实 embedder。只在生产装配路径调用，测试请注入假向量。"""
+# 单次请求最多提交多少个文本。批量过大会被服务端拒绝，32 是稳妥值。
+MAX_EMBED_BATCH = 32
+
+
+def default_embed_fn() -> Callable[[list[str]], list[list[float]]]:
+    """构造真实 embedder。
+
+    契约是**批量**的：收 `list[str]`、返 `list[list[float]]`。
+    只在生产装配路径调用，测试请注入假向量。
+
+    内部按 MAX_EMBED_BATCH 切片——入库上千个块时，逐条发就是上千次往返，
+    按 32 一批降到几十次。
+    """
     from openai import OpenAI
 
     client = OpenAI(api_key=resolve_api_key(), base_url=BASE_URL)
 
-    def embed(text: str) -> list[float]:
-        resp = client.embeddings.create(model=EMBED_MODEL, input=[text])
-        return resp.data[0].embedding
+    def embed(texts: list[str]) -> list[list[float]]:
+        vectors: list[list[float]] = []
+        for i in range(0, len(texts), MAX_EMBED_BATCH):
+            resp = client.embeddings.create(
+                model=EMBED_MODEL, input=texts[i : i + MAX_EMBED_BATCH]
+            )
+            vectors.extend(item.embedding for item in resp.data)
+        return vectors
 
     return embed

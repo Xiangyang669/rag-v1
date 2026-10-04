@@ -47,6 +47,20 @@ def test_empty_query_returns_empty(fts):
     assert fts.search("", k=5) == []
 
 
+def test_multi_term_query_is_or_not_and(tmp_path):
+    """多词查询应当按 OR 处理——BM25 本来就按命中词数和 IDF 排序。
+
+    用 AND 的话，「Admin Service 是什么？」这种**带无关词**的查询会直接
+    0 命中：只要查询里有一个词不在文档里，整条就废了。真语料上这会让
+    全文路在四类问题上全部得 0 分。
+    """
+    s = FtsStore(tmp_path / "kb.db")
+    s.add([Chunk("c1", "d", ("A",), "Admin service overview")])
+
+    # 只有部分词命中，也应当召回
+    assert [h.chunk_id for h in s.search("Admin 完全无关的词", k=5)] == ["c1"]
+
+
 def test_build_corpus_keeps_two_paths_in_sync(tmp_path):
     """入库时两路必须收到同一个 all_chunks——块 ID 集合完全一致。"""
     corpus = tmp_path / "corpus"
@@ -62,6 +76,33 @@ def test_build_corpus_keeps_two_paths_in_sync(tmp_path):
     assert f.chunk_ids() == {h.chunk_id for h in v.search("x y", k=10)} | {
         h.chunk_id for h in v.search("y", k=10)
     }
+
+
+def test_build_corpus_builds_all_three_indexes(tmp_path):
+    """入库必须**同时**建三路索引。
+
+    少建一路，那一路在融合时永远是空的——而每个模块各自的测试都还是绿的。
+    这类"集成缺口"只有真正跑一遍端到端才会暴露。
+    """
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "a.md").write_text("# 模块 A\n\n## f(x, y)\n\n说明\n", encoding="utf-8")
+
+    build_corpus(corpus, tmp_path / "idx", embed_fn=fake_embed)
+
+    idx = tmp_path / "idx"
+    assert (idx / "vec").exists(), "向量索引没建"
+    assert (idx / "kb.db").exists(), "全文索引没建"
+    assert (idx / "graph.db").exists(), "图谱索引没建 —— 三路缺一路"
+
+    from ragv1.store.graph_store import GraphStore
+
+    g = GraphStore(idx / "graph.db")
+    aliases = g.aliases()
+    assert aliases, "图谱索引建了，但一个实体都没有"
+    # 函数实体的 canonical 会用父标题限定（模块 A.f），裸名走别名反查
+    assert aliases.get("f"), "函数实体没进图谱"
+    assert g.chunks_of(aliases["f"]), "实体没挂 posting list"
 
 
 # ── 修复轮：评审发现 1 ────────────────────────────────────────

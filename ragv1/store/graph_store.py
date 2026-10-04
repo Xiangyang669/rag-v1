@@ -9,6 +9,7 @@ posting list 是硬约束二：没有它，图谱路抽完实体回不到原文�
 """
 
 import sqlite3
+import threading
 from pathlib import Path
 
 import networkx as nx
@@ -21,7 +22,13 @@ ALIAS_SEP = ","
 
 class GraphStore:
     def __init__(self, db_path: str | Path):
-        self._con = sqlite3.connect(str(db_path))
+        # ⚠️ 检索时 LangGraph 会把三路分发到**不同线程**并行执行。sqlite3
+        # 默认 check_same_thread=True，只允许创建连接的那个线程使用它——于是
+        # 并行调度下图谱路会抛 ProgrammingError，被降级机制静默吞成空结果。
+        # 这个缺陷在假检索器的单测里看不见，只有三路真检索器跑完整编排才暴露。
+        self._con = sqlite3.connect(str(db_path), check_same_thread=False)
+        # 单连接被多线程并发读，用一把锁串行化（读都很短）
+        self._lock = threading.Lock()
         self._con.execute(
             "CREATE TABLE IF NOT EXISTS nodes ("
             "  canonical TEXT PRIMARY KEY,"
@@ -78,12 +85,11 @@ class GraphStore:
 
     def chunks_of(self, entity: str) -> list[str]:
         """posting list：该实体出现在哪些块。"""
-        return sorted(
-            row[0]
-            for row in self._con.execute(
+        with self._lock:
+            rows = self._con.execute(
                 "SELECT chunk_id FROM entity_chunks WHERE entity = ?", (entity,)
-            )
-        )
+            ).fetchall()
+        return sorted(row[0] for row in rows)
 
     def neighbors(self, entity: str) -> list[str]:
         """一跳邻居（前驱 + 后继），已排序以保证可复现。
@@ -97,9 +103,11 @@ class GraphStore:
     def aliases(self) -> dict[str, str]:
         """别名 → canonical。canonical 自身也映射到自己。"""
         out: dict[str, str] = {}
-        for canonical, aliases in self._con.execute(
-            "SELECT canonical, aliases FROM nodes ORDER BY canonical"
-        ):
+        with self._lock:
+            rows = self._con.execute(
+                "SELECT canonical, aliases FROM nodes ORDER BY canonical"
+            ).fetchall()
+        for canonical, aliases in rows:
             out.setdefault(canonical, canonical)
             for alias in (aliases or "").split(ALIAS_SEP):
                 alias = alias.strip()

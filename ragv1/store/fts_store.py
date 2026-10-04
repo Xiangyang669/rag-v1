@@ -14,6 +14,7 @@
 
 import json
 import sqlite3
+import threading
 from pathlib import Path
 
 from ragv1.text.tokenize import tokenize_for_index
@@ -40,17 +41,28 @@ def _match_expr(query: str) -> str:
     """把查询转成安全的 FTS5 MATCH 表达式。
 
     FTS5 的 MATCH 有自己的一套语法（AND/OR/NEAR/引号/星号…），
-    直接把裸查询丢进去会被当语法解析。这里逐个 token 加引号，
-    空白连接即隐式 AND。
+    直接把裸查询丢进去会被当语法解析。这里逐个 token 加引号。
+
+    ⚠️ 用 **OR** 连接，不是隐式 AND：
+      AND 下只要查询里有一个词没出现在文档中，整条查询就 0 命中。真实
+      查询常带无关词——「Admin Service 是什么？」里的「是什么」不可能
+      出现在英文文档里，于是全文路在这类查询上**全线得 0 分**。
+      而 BM25 本来就是按命中词数与 IDF 排序的，OR 才是它的正常工作方式。
     """
     tokens = [t.replace('"', '""') for t in query.split() if t.strip()]
-    return " ".join(f'"{t}"' for t in tokens)
+    return " OR ".join(f'"{t}"' for t in tokens)
 
 
 class FtsStore:
     def __init__(self, db_path: str | Path):
         self._db_path = str(db_path)
-        self._con = sqlite3.connect(self._db_path)
+        # ⚠️ 检索时 LangGraph 会把三路分发到**不同线程**并行执行。sqlite3
+        # 默认 check_same_thread=True，只允许创建连接的那个线程使用它——于是
+        # 并行调度下全文路会抛 ProgrammingError，被降级机制静默吞成空结果。
+        # 与 GraphStore 同一套方案（那个是集成验证时发现的同款缺陷）。
+        self._con = sqlite3.connect(self._db_path, check_same_thread=False)
+        # 单连接被多线程并发使用，用一把锁串行化
+        self._lock = threading.Lock()
         self._ensure_schema()
 
     def _ensure_schema(self) -> None:
@@ -106,40 +118,41 @@ class FtsStore:
             return
         ids = [(c.chunk_id,) for c in chunks]
 
-        self._con.executemany(
-            "INSERT OR REPLACE INTO chunks"
-            " (chunk_id, doc_id, heading_path, text, kind, page, \"order\", part,"
-            "  bbox, image_ref, image_path, table_structured, degrade)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            [
-                (
-                    c.chunk_id,
-                    c.doc_id,
-                    "/".join(c.heading_path),
-                    c.text,
-                    c.kind,
-                    c.page,
-                    c.order,
-                    c.part,
-                    json.dumps(list(c.bbox)) if c.bbox is not None else None,
-                    c.image_ref,
-                    c.image_path,
-                    int(c.table_structured),
-                    json.dumps(list(c.degrade)),
-                )
-                for c in chunks
-            ],
-        )
-        # ⚠️ fts5 表没有唯一约束，裸 INSERT 会让重跑入库产生重复行 ——
-        # 重复的块在 RRF 里会拿到 2/(k+rank)，静默污染评估数字。
-        # 先按 chunk_id 清掉旧行，与 VectorStore / GraphStore 的幂等性对齐。
-        self._con.executemany("DELETE FROM chunks_fts WHERE chunk_id = ?", ids)
-        # 只有这一张表存分词结果；上面那张表永远是原文
-        self._con.executemany(
-            "INSERT INTO chunks_fts (chunk_id, text) VALUES (?, ?)",
-            [(c.chunk_id, tokenize_for_index(c.text)) for c in chunks],
-        )
-        self._con.commit()
+        with self._lock:
+            self._con.executemany(
+                "INSERT OR REPLACE INTO chunks"
+                " (chunk_id, doc_id, heading_path, text, kind, page, \"order\", part,"
+                "  bbox, image_ref, image_path, table_structured, degrade)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [
+                    (
+                        c.chunk_id,
+                        c.doc_id,
+                        "/".join(c.heading_path),
+                        c.text,
+                        c.kind,
+                        c.page,
+                        c.order,
+                        c.part,
+                        json.dumps(list(c.bbox)) if c.bbox is not None else None,
+                        c.image_ref,
+                        c.image_path,
+                        int(c.table_structured),
+                        json.dumps(list(c.degrade)),
+                    )
+                    for c in chunks
+                ],
+            )
+            # ⚠️ fts5 表没有唯一约束，裸 INSERT 会让重跑入库产生重复行 ——
+            # 重复的块在 RRF 里会拿到 2/(k+rank)，静默污染评估数字。
+            # 先按 chunk_id 清掉旧行，与 VectorStore / GraphStore 的幂等性对齐。
+            self._con.executemany("DELETE FROM chunks_fts WHERE chunk_id = ?", ids)
+            # 只有这一张表存分词结果；上面那张表永远是原文
+            self._con.executemany(
+                "INSERT INTO chunks_fts (chunk_id, text) VALUES (?, ?)",
+                [(c.chunk_id, tokenize_for_index(c.text)) for c in chunks],
+            )
+            self._con.commit()
 
     def search(self, query: str, k: int) -> list[Hit]:
         if not query.strip():
@@ -147,25 +160,29 @@ class FtsStore:
         expr = _match_expr(tokenize_for_index(query))
         if not expr:
             return []
-        rows = self._con.execute(
-            "SELECT chunk_id, bm25(chunks_fts) AS score"
-            " FROM chunks_fts WHERE chunks_fts MATCH ?"
-            " ORDER BY score LIMIT ?",
-            (expr, k),
-        ).fetchall()
+        with self._lock:
+            rows = self._con.execute(
+                "SELECT chunk_id, bm25(chunks_fts) AS score"
+                " FROM chunks_fts WHERE chunks_fts MATCH ?"
+                " ORDER BY score LIMIT ?",
+                (expr, k),
+            ).fetchall()
         return [
             Hit(chunk_id=cid, rank=i + 1, score=score, path="fulltext")
             for i, (cid, score) in enumerate(rows)
         ]
 
     def chunk_ids(self) -> set[str]:
-        return {row[0] for row in self._con.execute("SELECT chunk_id FROM chunks")}
+        with self._lock:
+            rows = self._con.execute("SELECT chunk_id FROM chunks").fetchall()
+        return {row[0] for row in rows}
 
     def text_of(self, chunk_id: str) -> str | None:
         """回源取块原文（不是分词后的检索文本）。"""
-        row = self._con.execute(
-            "SELECT text FROM chunks WHERE chunk_id = ?", (chunk_id,)
-        ).fetchone()
+        with self._lock:
+            row = self._con.execute(
+                "SELECT text FROM chunks WHERE chunk_id = ?", (chunk_id,)
+            ).fetchone()
         return row[0] if row else None
 
     def meta_of(self, chunk_id: str) -> dict | None:
@@ -174,10 +191,11 @@ class FtsStore:
         bbox / degrade 以 JSON 文本存储，这里反序列化回 Python 值——
         调用方拿到的是可直接用的形状（列表），不用关心存储细节。
         """
-        row = self._con.execute(
-            f"SELECT {', '.join(_META_COLUMNS)} FROM chunks WHERE chunk_id = ?",
-            (chunk_id,),
-        ).fetchone()
+        with self._lock:
+            row = self._con.execute(
+                f"SELECT {', '.join(_META_COLUMNS)} FROM chunks WHERE chunk_id = ?",
+                (chunk_id,),
+            ).fetchone()
         if row is None:
             return None
 

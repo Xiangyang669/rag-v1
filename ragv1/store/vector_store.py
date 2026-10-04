@@ -1,7 +1,10 @@
 """向量索引（Chroma）。
 
 Chroma 不负责算 embedding，所以向量由我们算好再传进去（见 embedding.py）。
-embed_fn 可注入：测试传入确定性假向量，避免单测依赖网络与付费 API。
+
+⚠️ `embed_fn` 的契约是**批量**的：收 `list[str]`、返 `list[list[float]]`。
+入库时整批一次交给它——上千个块逐条调用就是上千次网络往返，批量后
+降到几十次。这是入库耗时的主要来源。测试传入确定性假向量，避免单测联网。
 
 元数据随向量一起写入 Chroma 的 metadatas。⚠️ Chroma 只接受
 str / int / float / bool 四种标量——元组与 None 都会报错，所以 bbox 与
@@ -17,6 +20,8 @@ import chromadb
 from ragv1.types import Chunk, Hit
 
 COLLECTION = "chunks"
+
+EmbedFn = Callable[[list[str]], list[list[float]]]
 
 
 def chunk_metadata(c: Chunk) -> dict:
@@ -45,11 +50,7 @@ def chunk_metadata(c: Chunk) -> dict:
 
 
 class VectorStore:
-    def __init__(
-        self,
-        path: str | Path,
-        embed_fn: Callable[[str], list[float]] | None = None,
-    ):
+    def __init__(self, path: str | Path, embed_fn: EmbedFn | None = None):
         if embed_fn is None:
             from ragv1.embedding import default_embed_fn
 
@@ -68,14 +69,15 @@ class VectorStore:
         self._col.add(
             ids=[c.chunk_id for c in chunks],
             documents=[c.text for c in chunks],
-            embeddings=[self._embed(c.text) for c in chunks],
+            # 一次批量，不是每块一次
+            embeddings=self._embed([c.text for c in chunks]),
             metadatas=[chunk_metadata(c) for c in chunks],
         )
 
     def search(self, query: str, k: int) -> list[Hit]:
         if not query.strip():
             return []
-        res = self._col.query(query_embeddings=[self._embed(query)], n_results=k)
+        res = self._col.query(query_embeddings=self._embed([query]), n_results=k)
         ids = res["ids"][0] if res["ids"] else []
         # cosine 空间下 distance = 1 - 相似度，转回相似度作为分数（越大越相关）
         dists = res["distances"][0] if res.get("distances") else [0.0] * len(ids)

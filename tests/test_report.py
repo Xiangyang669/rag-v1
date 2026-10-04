@@ -47,8 +47,22 @@ def test_report_surfaces_warnings():
 
 
 def test_report_notes_known_bias():
+    """报告必须声明评估集的偏差**方向**。
+
+    早期版本写的是「全文路占便宜、图谱增益被低估」——真跑之后实测**方向相反**：
+    A/C/D 三类问题由图谱索引的同一套 heading 结构生成，因此偏向图谱路。
+    这条测试因此从「含"词面"」改为断言修正后的方向。
+    """
     out = build_report(M, warnings=[])
-    assert "词面" in out
+    assert "结构偏向" in out
+    assert "偏向图谱路" in out
+
+
+def test_report_notes_rrf_equal_weight_limitation():
+    """等权融合会稀释强路 —— 必须写明，并标为 V2 候选。"""
+    out = build_report(M, warnings=[])
+    assert "等权" in out
+    assert "V2" in out
 
 
 def test_gain_is_relative_to_strongest_single_path():

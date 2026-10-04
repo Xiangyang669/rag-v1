@@ -79,3 +79,24 @@ def test_extraction_is_deterministic(chunks):
 def test_doc_without_headings_yields_no_entities():
     entities, relations = extract([Chunk("x", "d", (), "一段普通正文。")])
     assert entities == [] and relations == []
+
+
+# ── 真数据暴露的问题：普通标题里的括号被当成函数签名 ──────────
+# 合成测试用的 requests.get(url, timeout=None) 无歧义，但真实文档里
+# 满是「Default Mode (Beta)」「Browser (Chrome / Firefox)」这类标题。
+
+
+def test_parenthetical_heading_is_not_a_function():
+    chunks = [Chunk("k1", "d", ("Documentation", "Default Mode (Beta)"), "说明")]
+    entities, _ = extract(chunks)
+    kinds = {e.canonical: e.kind for e in entities}
+    assert kinds.get("Default Mode (Beta)") == "section"
+    assert "Documentation.Default Mode" not in kinds
+
+
+def test_non_identifier_params_heading_is_not_a_function():
+    chunks = [Chunk("k1", "d", ("Docs", "Browser (Chrome / Firefox)"), "说明")]
+    entities, _ = extract(chunks)
+    kinds = {e.canonical: e.kind for e in entities}
+    assert kinds.get("Browser (Chrome / Firefox)") == "section"
+    assert "Docs.Browser" not in kinds

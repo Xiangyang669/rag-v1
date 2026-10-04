@@ -1,0 +1,34 @@
+# rag_v1 的最小可安装声明。
+#
+# 加这个文件的原因：项目 2（cs_agent）要把本项目当作**检索内核**复用，
+# 而在此之前 rag_v1 只是一个目录 + pytest.ini，不是能装的东西 ——
+# 别人想用只能靠 sys.path 硬塞，那是依赖关系的脏写法。
+#
+# 依赖清单与同目录的 requirements.txt 保持一致（pytest 归到 dev extra，
+# 它是测试依赖，不该成为运行期依赖）。
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ragv1"
+version = "0.1.0"
+description = "三层检索 RAG —— 向量/全文/图谱三路并行召回 + RRF 融合"
+requires-python = ">=3.12"
+dependencies = [
+    "chromadb",
+    "networkx",
+    "jieba",
+    "langgraph",
+    "fastapi",
+    "uvicorn",
+    "openai",
+    "langfuse",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+include = ["ragv1*"]
