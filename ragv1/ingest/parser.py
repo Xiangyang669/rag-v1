@@ -11,7 +11,17 @@ from ragv1.types import Block, ParsedDoc
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
 
 
-def _strip_frontmatter(text: str) -> str:
+def is_fence_line(line: str) -> bool:
+    """是否是围栏代码块的边界行（``` 或 ~~~）。
+
+    围栏内的 # 是注释、| 是管道符，都不是文档结构——技术文档里代码块遍地，
+    不排除它们会产生幽灵 section 与假表格。
+    """
+    stripped = line.lstrip()
+    return stripped.startswith("```") or stripped.startswith("~~~")
+
+
+def strip_frontmatter(text: str) -> str:
     """丢弃开头由 --- 行包裹的 frontmatter 块。
 
     没有闭合的 --- 时整体视为正文，不做剥离——宁可多留，不可误删。
@@ -25,9 +35,13 @@ def _strip_frontmatter(text: str) -> str:
     return text
 
 
+# 旧名保留：本模块的既有调用点与测试用它
+_strip_frontmatter = strip_frontmatter
+
+
 def parse_document(text: str, doc_id: str) -> ParsedDoc:
     """解析成一组 Block：每个标题一个（含其下正文），标题前的正文为 level=0。"""
-    body = _strip_frontmatter(text)
+    body = strip_frontmatter(text)
 
     blocks: list[Block] = []
     level, title = 0, ""
@@ -43,7 +57,7 @@ def parse_document(text: str, doc_id: str) -> ParsedDoc:
         # 围栏代码块：``` / ~~~ 之间的内容原样保留，其中的 # 是注释不是标题。
         # 技术文档里代码块遍地都是，误判会产生幽灵 section，让后续块的
         # heading_path 全错，图谱也会长出假节点。
-        if line.lstrip().startswith("```") or line.lstrip().startswith("~~~"):
+        if is_fence_line(line):
             in_fence = not in_fence
             buf.append(line)
             continue
