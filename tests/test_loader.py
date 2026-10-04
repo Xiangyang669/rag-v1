@@ -132,3 +132,79 @@ def test_no_engines_configured_keeps_phase1_behavior(tmp_path):
     els = markdown_elements(md, doc_id="d.md")
     assert [e.kind for e in els] == ["text"]
     assert "![示意图](a.png)" in els[0].text
+
+
+# ─────────────────────────────────────────────────────────────
+# PDF（阶段二 Task 8）
+# ─────────────────────────────────────────────────────────────
+
+
+class _C:
+    """一个字符（text 可以是多字，够用）。"""
+
+    def __init__(self, text, x0, top, x1, bottom):
+        self.text, self.x0, self.top, self.x1, self.bottom = text, x0, top, x1, bottom
+
+
+class _Page:
+    def __init__(self, chars):
+        self.chars = list(chars)
+        self.images = []
+
+    def find_tables(self):
+        return []
+
+
+class _Pdf:
+    def __init__(self, pages):
+        self.pages = list(pages)
+
+
+def test_pdf_elements_returns_text_regions():
+    from ragv1.ingest import loader
+
+    els = loader.pdf_elements(_Pdf([_Page([_C("你好", 0, 0, 20, 10)])]), doc_id="a.pdf")
+    assert [e.kind for e in els] == ["text"]
+    assert "你好" in els[0].text
+    assert els[0].page == 1
+
+
+def test_pdf_page_numbers_are_one_based_and_ordered():
+    from ragv1.ingest import loader
+
+    els = loader.pdf_elements(
+        _Pdf([_Page([_C("第一页", 0, 0, 20, 10)]), _Page([_C("第二页", 0, 0, 20, 10)])]),
+        doc_id="a.pdf",
+    )
+    assert [e.page for e in els] == [1, 2]
+    assert [e.order for e in els] == [0, 1]
+
+
+def test_pdf_table_region_becomes_table_element():
+    from ragv1.ingest import loader
+
+    class _Table:
+        bbox = (0, 0, 100, 50)
+        rows = [["a", "b"], ["1", "2"]]
+
+    class _TablePage(_Page):
+        def find_tables(self):
+            return [_Table()]
+
+    # 页上必须有文字层：没有文字层的页会被当成扫描件整页渲染，压根不走表格分支
+    page = _TablePage([_C("表", 0, 200, 10, 210)])
+    els = loader.pdf_elements(_Pdf([page]), doc_id="a.pdf")
+
+    kinds = [e.kind for e in els]
+    assert "table" in kinds
+    table = els[kinds.index("table")]
+    assert "| a | b |" in table.text
+    assert "| --- | --- |" in table.text
+    assert table.page == 1
+
+
+def test_corrupt_pdf_degrades_instead_of_raising(tmp_path):
+    """损坏/加密的 PDF 不能抛出"""
+    bad = tmp_path / "bad.pdf"
+    bad.write_bytes(b"%PDF-1.4 not really a pdf")
+    assert isinstance(load_document(bad, doc_id="bad.pdf"), list)

@@ -48,6 +48,21 @@ def _is_remote(ref: str) -> bool:
     return ref.startswith("http://") or ref.startswith("https://")
 
 
+def cache_image_bytes(data: bytes, ref: str, cache_dir: Path) -> str | None:
+    """把已经在手上的图片字节落进缓存，返回路径；失败返回 None。
+
+    PDF 里的图不需要「取回」——字节就在页对象里。但元数据仍要一个本地路径，
+    所以走这里落盘。缓存失败不影响使用。
+    """
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        path = _cache_path(ref, cache_dir)
+        path.write_bytes(data)
+        return str(path)
+    except OSError:
+        return None
+
+
 def resolve_image_bytes(
     ref: str,
     base_dir: Path,

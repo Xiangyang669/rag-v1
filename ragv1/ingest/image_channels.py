@@ -36,7 +36,11 @@ from typing import Callable
 
 from ragv1 import config
 from ragv1.ingest import degrade
-from ragv1.ingest.image_source import resolve_image_bytes
+from ragv1.ingest.image_source import (
+    ImageBytes,
+    cache_image_bytes,
+    resolve_image_bytes,
+)
 from ragv1.ingest.vlm import VisionResult
 from ragv1.types import Element
 
@@ -129,10 +133,14 @@ def resolve_image_element(
     cache_dir: Path,
     fetcher: Callable[[str], bytes] | None = None,
     cfg: ChannelConfig = ChannelConfig(),
+    image_data: bytes | None = None,
 ) -> Element:
     """把图片元素解析成最终文本元素（kind 仍为 image）。
 
     任何失败都落码返回，绝不抛——一张图出问题不该让整篇文档入库失败。
+
+    `image_data`：**已经在手上的像素**（PDF 里图片字节就在页对象里，不需要
+    「取回」）。给了就直接用，并尽力落进缓存换一个 image_path。
     """
     ref = el.image_ref or ""
     placeholder = f"{PLACEHOLDER} {el.text.strip() or ref}".strip()
@@ -144,7 +152,10 @@ def resolve_image_element(
             degrade=degrade.normalize((*el.degrade, degrade.VLM_UNAVAILABLE)),
         )
 
-    got = resolve_image_bytes(ref, base_dir, cache_dir, fetcher=fetcher)
+    if image_data is not None:
+        got = ImageBytes(image_data, cache_image_bytes(image_data, ref or "image", cache_dir))
+    else:
+        got = resolve_image_bytes(ref, base_dir, cache_dir, fetcher=fetcher)
     codes = [*el.degrade, *got.degrade]
 
     if got.data is None:
