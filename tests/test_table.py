@@ -25,6 +25,17 @@ def test_split_row_handles_escaped_pipe():
     assert split_row(r"| a \| b | c |") == ["a | b", "c"]
 
 
+def test_split_row_only_treats_pipe_and_backslash_as_escape():
+    """Markdown 只定义 \\| 与 \\\\ 两种转义。
+
+    其余 \\X 必须保持字面——技术语料里到处是 Windows 路径与正则，
+    把它们里的反斜杠吃掉是静默的数据损坏。
+    """
+    assert split_row(r"| C:\temp | x |") == ["C:\\temp", "x"]
+    assert split_row(r"| regex \d+ | y |") == ["regex \\d+", "y"]
+    assert split_row(r"| a \\ b | c |") == ["a \\ b", "c"]
+
+
 def test_normalize_strips_cells_and_keeps_shape():
     assert normalize_table(["| a |b|", "|---|---|", "| 1 | 2 |"]) == (
         "| a | b |\n| --- | --- |\n| 1 | 2 |"

@@ -47,7 +47,14 @@ def split_row(line: str) -> list[str]:
     escaped = False
     for ch in s:
         if escaped:
-            buf.append(ch)
+            # Markdown 只有 \| 与 \\ 两种转义。其余 \X 保持字面——
+            # 表格里到处是 Windows 路径（C:\temp）和正则（\d+），
+            # 一律吃掉反斜杠是静默的数据损坏。
+            if ch in ("|", "\\"):
+                buf.append(ch)
+            else:
+                buf.append("\\")
+                buf.append(ch)
             escaped = False
         elif ch == "\\":
             escaped = True
@@ -56,6 +63,8 @@ def split_row(line: str) -> list[str]:
             buf = []
         else:
             buf.append(ch)
+    if escaped:
+        buf.append("\\")  # 行尾落单的反斜杠，原样保留
     cells.append("".join(buf).strip())
     return cells
 

@@ -7,37 +7,18 @@
 chunker._group_text（含 OVER_CAP 再切），表格则交给 table.split_table——
 后者按「表头 + 若干行」切并保证每块重复表头，绕开了按字符硬切的路径。
 
-「纯文本文档产出与改造前逐字节一致」由两件事共同保证：合并连续正文段
-（_merge_text_runs），以及 chunk_id 仍用全局递增的 index（make_chunk_id
-的签名没变）。
-"""
+「纯文本文档产出与改造前逐字节一致」由两件事共同保证：loader 把同一节里
+连续的正文行攒成**一个** text Element（与 chunker._iter_sections 的 section
+正文同构），以及 chunk_id 仍用全局递增的 index（make_chunk_id 签名没变）。
 
-from dataclasses import replace
+⚠️ 曾经这里有一个「按 heading_path 相等合并相邻 text 元素」的步骤，是错的：
+相邻的 text 元素只可能来自**连续两个同名标题**（那是两个不同的节），中间隔着
+表格的两段正文并不会相邻（表格就在它们之间）。所以那个合并只会在纯文本文档
+上把两个节错并成一个块，直接违反等价性。删除它，规范由 loader 单独保证。
+"""
 
 from ragv1.ingest import chunker, table
 from ragv1.types import Chunk, Element
-
-
-def _merge_text_runs(elements: list[Element]) -> list[Element]:
-    """同一 heading_path 下相邻的 text 元素合并成一个正文段。
-
-    表格/图片是**唯一的断开点**——它们必须独立成块，不能被卷进正文。
-    合并回来的正文段与 chunker._iter_sections 产出的 section 正文完全相同，
-    这就是纯文本等价性的来源。
-    """
-    merged: list[Element] = []
-    for el in elements:
-        if (
-            el.kind == "text"
-            and merged
-            and merged[-1].kind == "text"
-            and merged[-1].heading_path == el.heading_path
-        ):
-            prev = merged[-1]
-            merged[-1] = replace(prev, text=f"{prev.text}\n\n{el.text}")
-        else:
-            merged.append(el)
-    return merged
 
 
 def _emit(
@@ -75,7 +56,7 @@ def chunk_elements(elements: list[Element], doc_id: str, max_chars: int) -> list
     """把有序 Element 流切成三路共用的块列表。"""
     chunks: list[Chunk] = []
 
-    for seg in _merge_text_runs(elements):
+    for seg in elements:
         head = chunker._head(seg.heading_path)
 
         if seg.kind == "table":

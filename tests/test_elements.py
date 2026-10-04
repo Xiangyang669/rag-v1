@@ -45,13 +45,26 @@ def test_element_and_chunk_are_frozen():
 # ─────────────────────────────────────────────────────────────
 
 _PURE_TEXT_DOCS = [
-    # 无表格、无图片：覆盖多级标题、空节、代码围栏、超长节
+    # 无表格、无图片：覆盖多级标题、空节、代码围栏、超长节、同名标题
     "# A\n\n前段。\n\n## B\n\n二段。\n\n# C\n\n三段。\n",
     "无标题文档，只有一段正文。\n",
     "# H\n\n```python\n# 代码里的井号不是标题\nx = 1\n```\n\n正文。\n",
     "# H\n\n" + "很长的段落。" * 300 + "\n",  # 触发 OVER_CAP 再切
     "# A\n\n一。\n\n## B\n\n",  # 空节
+    "# A\n\n正文1\n\n# A\n\n正文2\n",  # 连续同名标题：两个节，不是一个节
+    "# A\n\n## B\ntext1\n\n## B\ntext2\n",  # 同名子标题
 ]
+
+
+def test_same_named_headings_are_not_merged_into_one_chunk():
+    """同名标题是两个独立的节，不是一个节被表格断开的两半。
+
+    旧链路对它们产出两个块；新链路若按「heading_path 相等」合并，
+    就会产出两个块变成一个——那会直接违反纯文本逐字节等价的硬约束。
+    """
+    md = "# A\n\n正文1\n\n# A\n\n正文2\n"
+    chunks = chunk_elements(markdown_elements(md, doc_id="d.md"), "d.md", MAX_CHARS)
+    assert [c.text for c in chunks] == ["A\n正文1", "A\n正文2"]
 
 
 def test_pure_text_output_is_byte_identical_to_old_pipeline():

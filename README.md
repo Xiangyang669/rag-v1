@@ -27,7 +27,7 @@ query ──┼─→ 全文检索（SQLite FTS5 bm25）   ─┼─→ RRF 融�
 | 产出块数 | **2050**（1923 正文 + **127 表格**） |
 | 超出长度上限的节 | **11.5%**（据此设计 OVER_CAP 分组再切） |
 | 三路并行调度 | **0.209s**（串行需 0.60s）→ **2.87× 加速** |
-| 自动化测试 | **149 个，全绿** |
+| 自动化测试 | **151 个，全绿** |
 
 表格入库实测（`py scripts/verify_tables.py`）：
 
@@ -82,7 +82,7 @@ loader / elements / tokenizer 是三条路**共用**的前置，只在写入时�
 
 ```bash
 pip install -r requirements.txt
-py -m pytest                              # 149 个测试
+py -m pytest                              # 151 个测试
 ```
 
 真实索引需要 embedding API（SiliconFlow `BAAI/bge-m3`）。把 key 放进项目根的 `.env`：
@@ -126,7 +126,7 @@ ragv1/
 ## 测试
 
 ```bash
-py -m pytest -q      # 149 passed
+py -m pytest -q      # 151 passed
 ```
 
 测试覆盖的边界包括：空查询、YAML frontmatter、无标题文档、三路全空、中文分词静默失效、超长节、单路故障降级、Langfuse 无 key 时 no-op；以及表格相关的——代码围栏里的 `|` 行、列数不一致的畸形表、零数据行的空表、单元格内的转义竖线、单行超预算不切断。全程 TDD，每个测试都先看着它失败。
