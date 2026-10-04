@@ -38,8 +38,15 @@ def test_extract_wraps_engine_output_into_result(monkeypatch):
     assert abs(r.confidence - 0.94) < 1e-6  # 逐行均值
 
 
-def test_extract_on_engine_exception_returns_empty_result(monkeypatch):
-    """拿到非图片字节时不能抛"""
+def test_engine_exception_propagates_to_caller(monkeypatch):
+    """引擎**不做降级**，异常要冒到调用方。
+
+    本模块的契约是「只管抽字，不管降级码」——降级策略属于 image_channels。
+    在这里把异常吞成空结果，会让「引擎抛异常」与「图里没字」变得无法区分，
+    `ocr_failed` 也就永远打不出来。
+    """
+    import pytest
+
     eng = build_ocr_engine("rapidocr")
 
     class BoomImpl:
@@ -47,5 +54,5 @@ def test_extract_on_engine_exception_returns_empty_result(monkeypatch):
             raise ValueError("不是图片")
 
     monkeypatch.setattr(eng, "_impl", BoomImpl(), raising=False)
-    r = eng.extract(b"<html>404</html>")
-    assert r.text == "" and r.confidence == 0.0
+    with pytest.raises(ValueError):
+        eng.extract(b"<html>404</html>")

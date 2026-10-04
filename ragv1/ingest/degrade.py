@@ -46,6 +46,9 @@ VLM_BAD_JSON = "vlm_bad_json"
 """多模态返回的不是合法 JSON → 原始返回文本当描述保留，不丢。"""
 
 # ── PDF 版面分析 ──
+PDF_OPEN_FAILED = "pdf_open_failed"
+"""整份 PDF 打不开（损坏 / 加密 / 根本不是 PDF）→ 产出占位元素，不静默跳过。"""
+
 PDF_PAGE_NO_TEXT_LAYER = "pdf_page_no_text_layer"
 """该页没有文字层（扫描件）→ 整页渲染后走图片双通道。"""
 
@@ -69,6 +72,7 @@ ALL_CODES: frozenset[str] = frozenset(
         VLM_UNAVAILABLE,
         VLM_FAILED,
         VLM_BAD_JSON,
+        PDF_OPEN_FAILED,
         PDF_PAGE_NO_TEXT_LAYER,
         PDF_RENDER_FAILED,
         PDF_TABLE_BBOX_MISSING,

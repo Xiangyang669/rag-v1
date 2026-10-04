@@ -128,6 +128,33 @@ def test_min_chars_threshold_decides_text_vs_visual(tmp_path):
 # ── 解析失败 / 取图失败 ───────────────────────────────────────
 
 
+def test_ocr_engine_failure_is_recorded_as_ocr_failed(tmp_path):
+    """「引擎抛异常」与「图里没字」必须区分开——前者是缺陷，后者是图的属性。
+
+    注意这里 OCR 挂了但多模态有产出，`ocr_failed` 仍然要记：通道级失败永远记。
+    """
+
+    class BoomOcr:
+        def extract(self, image):
+            raise ValueError("不是图片")
+
+    out = _run(tmp_path, BoomOcr(), FakeVlm(image_type="照片", content="一张现场照片"))
+    assert degrade.OCR_FAILED in out.degrade
+    assert "一张现场照片" in out.text
+
+
+def test_vlm_engine_failure_is_recorded_as_vlm_failed(tmp_path):
+    """多模态抛异常（超时/限流）也要落码，且不影响 OCR 的产出"""
+
+    class BoomVlm:
+        def describe(self, image):
+            raise RuntimeError("网关超时")
+
+    out = _run(tmp_path, FakeOcr("服务状态正常"), BoomVlm())
+    assert degrade.VLM_FAILED in out.degrade
+    assert "服务状态正常" in out.text
+
+
 def test_bad_vlm_json_keeps_raw_text(tmp_path):
     """解析失败也要把原文留下"""
     vlm = FakeVlm(image_type="其他", content="", raw="```json\n{坏掉的\n```")

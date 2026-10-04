@@ -152,10 +152,17 @@ def _table_rows_of(table) -> tuple[tuple[str, ...], ...]:
 
 
 def _render_failed(page_no: int) -> Region:
+    """渲染失败的占位区域。
+
+    ⚠️ **text 必须非空**。上游（loader）按「有没有文本」决定要不要产出元素，
+    空文本的占位区域会被当空块丢掉——那样这一页就无声消失了，降级码也到不了
+    检索层，等于白记。占位文本本身就是「这页没解析出来」的可检索证据。
+    """
     return Region(
         kind="text",
         page=page_no,
         bbox=(0.0, 0.0, 0.0, 0.0),
+        text="[本页渲染失败，内容未能解析]",
         degrade=(degrade.PDF_RENDER_FAILED,),
     )
 
@@ -167,11 +174,13 @@ def analyze_page(
     if not has_text_layer(page):
         # 扫描件：整页当一张图，交给图片双通道
         if render_page is None:
+            # 同样必须给非空 text —— 见 _render_failed 的说明
             return [
                 Region(
                     kind="text",
                     page=page_no,
                     bbox=(0.0, 0.0, 0.0, 0.0),
+                    text="[本页无文字层，且未提供渲染器，内容未能解析]",
                     degrade=(degrade.PDF_PAGE_NO_TEXT_LAYER,),
                 )
             ]

@@ -204,7 +204,44 @@ def test_pdf_table_region_becomes_table_element():
 
 
 def test_corrupt_pdf_degrades_instead_of_raising(tmp_path):
-    """损坏/加密的 PDF 不能抛出"""
+    """损坏/加密的 PDF 不能抛，也不能**静默跳过**——要留下带码的占位元素。
+
+    整份文档零贡献、又没有任何可观测标记，是「不静默丢弃」这条原则上的洞。
+    """
     bad = tmp_path / "bad.pdf"
     bad.write_bytes(b"%PDF-1.4 not really a pdf")
-    assert isinstance(load_document(bad, doc_id="bad.pdf"), list)
+
+    els = load_document(bad, doc_id="bad.pdf")
+    assert els, "打不开的 PDF 被静默跳过了"
+    assert degrade.PDF_OPEN_FAILED in els[0].degrade
+    assert "bad.pdf" in els[0].text
+
+
+def test_pdf_unrenderable_page_is_not_silently_dropped():
+    """无文字层又没给渲染器时，不能整页无声消失"""
+    from ragv1.ingest import loader
+
+    els = loader.pdf_elements(_Pdf([_Page([])]), doc_id="a.pdf")
+    assert els, "整页被静默丢弃了"
+    assert degrade.PDF_PAGE_NO_TEXT_LAYER in els[0].degrade
+    assert els[0].text.strip(), "占位元素不能是空文本——空块会被下一层丢掉"
+
+
+def test_pdf_render_failure_survives_to_chunks():
+    """渲染失败的那一页必须一路活到 chunk —— 只测到 analyze_page 是不够的。
+
+    这正是评审指出的盲区：analyze_page 返回了带码的 region，但 loader 里
+    `if region.text.strip()` 会把空文本的占位 region 丢掉，码就永远到不了检索层。
+    """
+    from ragv1.ingest import loader
+    from ragv1.ingest.elements import chunk_elements
+
+    def boom(page_no):
+        raise RuntimeError("渲染挂了")
+
+    els = loader.pdf_elements(_Pdf([_Page([])]), doc_id="a.pdf", render_page=boom)
+    assert degrade.PDF_RENDER_FAILED in els[0].degrade
+
+    chunks = chunk_elements(els, "a.pdf", 1200)
+    assert chunks, "占位元素在分块那一步被丢掉了——降级码到不了检索层"
+    assert degrade.PDF_RENDER_FAILED in chunks[0].degrade

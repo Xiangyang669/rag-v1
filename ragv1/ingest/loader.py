@@ -206,12 +206,13 @@ def pdf_elements(
             if region.kind == "table":
                 markdown = _region_table_markdown(region)
                 if markdown is None:
-                    # 版面相出了表格区域却拼不出结构：降级保留原文
+                    # 版面相出了表格区域却拼不出结构：降级保留原文。
+                    # ⚠️ text 不能为空——空块会被下一层丢掉，降级码就白记了。
                     elements.append(
                         Element(
                             kind="text",
                             order=len(elements),
-                            text=region.text,
+                            text=region.text or "[表格内容未能解析]",
                             page=page_no,
                             bbox=region.bbox,
                             degrade=degrade.normalize(
@@ -236,7 +237,9 @@ def pdf_elements(
                 element = Element(
                     kind="image",
                     order=len(elements),
-                    text="",
+                    # 占位非空：没有引擎时它不会被 resolve_image_element 填充，
+                    # 空文本会被下一层当空块丢掉
+                    text="[PDF 图片]",
                     page=page_no,
                     bbox=region.bbox,
                     image_ref=f"pdf://{doc_id}/p{page_no}",
@@ -310,7 +313,16 @@ def _load_pdf_file(path: Path, doc_id: str, engines: dict) -> list[Element]:
         with pdfplumber.open(path) as pdf:
             return pdf_elements(pdf, doc_id, render_page=render, **engines)
     except Exception:  # noqa: BLE001 —— 损坏/加密的 PDF 不能炸掉整次入库
-        return []
+        # 打不开也要留下**带码的占位元素**：整份文档零贡献、又没有任何可观测
+        # 标记，是「不静默丢弃」这条原则上的洞。
+        return [
+            Element(
+                kind="text",
+                order=0,
+                text=f"[PDF 无法解析] {doc_id}",
+                degrade=(degrade.PDF_OPEN_FAILED,),
+            )
+        ]
     finally:
         close()
 

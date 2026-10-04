@@ -43,10 +43,10 @@ class RapidOcrEngine:
         return self._impl
 
     def extract(self, image: bytes) -> OcrResult:
-        try:
-            raw, _elapse = self._engine()(image)
-        except Exception:  # noqa: BLE001 —— 降级点：非图片字节不该让入库崩
-            return OcrResult("", 0.0)
+        # ⚠️ 这里**不**吞异常。本模块的契约是「只管抽字，不管降级码」：
+        # 吞掉异常会让「引擎挂了」与「图里没字」变得无法区分，`ocr_failed`
+        # 也就永远打不出来。异常交给 image_channels._run_ocr 去映射成码。
+        raw, _elapse = self._engine()(image)
 
         # 无文字时 rapidocr 返回 None 或空列表，不能直接迭代
         if not raw:

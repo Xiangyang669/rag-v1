@@ -27,5 +27,6 @@ def test_normalize_empty():
     assert degrade.normalize([]) == ()
 
 
-def test_all_codes_has_the_fourteen():
-    assert len(degrade.ALL_CODES) == 14
+def test_all_codes_count():
+    """数量写死是为了让「不小心删了一个码」或「加了码没进 ALL_CODES」都被发现。"""
+    assert len(degrade.ALL_CODES) == 15
