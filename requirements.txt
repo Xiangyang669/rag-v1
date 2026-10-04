@@ -7,3 +7,4 @@ uvicorn
 pytest
 openai
 langfuse
+rapidocr-onnxruntime

@@ -4,6 +4,7 @@ V1 的语料目录是硬编码的本机路径（见计划的 Self-Review「未�
 语料换位置时改这里即可。
 """
 
+import os
 from pathlib import Path
 
 # V1 基准语料：结构化技术类文档（英文为主）
@@ -17,3 +18,27 @@ MAX_CHARS = 1200
 
 # RRF 的 k 常数（倒数排名融合）
 RRF_K = 60
+
+# ── 图片双通道 ──────────────────────────────────────────────
+# 引擎名都可从环境变量覆盖：换 OCR / 换多模态模型不该改代码。
+# 取值 "none" 表示显式禁用该通道。
+
+# OCR 引擎：rapidocr（本机 CPU 可跑，纯 pip）/ none
+OCR_ENGINE = os.environ.get("OCR_ENGINE", "rapidocr")
+
+# 多模态引擎：siliconflow（复用本项目的 SILICONFLOW_API_KEY）/ none
+VLM_ENGINE = os.environ.get("VLM_ENGINE", "siliconflow")
+
+# 多模态模型名。改它不影响其它通道。
+VLM_MODEL = os.environ.get("VLM_MODEL", "Qwen/Qwen2.5-VL-32B-Instruct")
+
+# 「OCR 有料」的判据：抽到的字符数与平均置信度都要过线，
+# 才认为这张图是「文字为主」，不必再花一次多模态调用。
+OCR_MIN_CHARS = int(os.environ.get("OCR_MIN_CHARS", "10"))
+OCR_MIN_CONF = float(os.environ.get("OCR_MIN_CONF", "0.5"))
+
+# 图片通道总开关。关掉后图片行按普通正文处理（与阶段一行为一致）。
+ENABLE_IMAGE = os.environ.get("ENABLE_IMAGE", "1") not in {"0", "false", "no"}
+
+# 远程图片下载后的本地缓存目录（在已 gitignore 的 .indexes/ 下）
+IMAGE_CACHE_DIR = INDEX_DIR / "images"
