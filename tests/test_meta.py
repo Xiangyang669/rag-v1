@@ -7,7 +7,10 @@ schema 版本守卫是有意的破坏性行为：版本不符就整表重建。�
 永远全量重建的数据，保留旧结构的收益为零，而误读旧结构的代价是拿错列。
 """
 
+import json
+
 from ragv1.store.fts_store import FtsStore
+from ragv1.store.vector_store import chunk_metadata
 from ragv1.types import Chunk
 
 
@@ -75,3 +78,38 @@ def test_repeated_add_does_not_duplicate_fts_rows(tmp_path):
     store.add([_chunk()])
     store.add([_chunk()])
     assert len(store.search("正文", k=10)) == 1
+
+
+# ── 向量路的元数据（Task 7）────────────────────────────────────
+
+
+def test_chunk_metadata_only_uses_chroma_scalar_types():
+    """Chroma 的 metadata 只接受 str/int/float/bool —— 元组和 None 都不行"""
+    meta = chunk_metadata(
+        _chunk(
+            kind="image", page=2, order=5, part=0,
+            bbox=(1.0, 2.0, 3.0, 4.0),
+            image_ref="http://x/y.png", image_path=None,
+            table_structured=True, degrade=("ocr_empty",),
+        )
+    )
+    for k, v in meta.items():
+        assert isinstance(v, (str, int, float, bool)), (
+            f"{k} 的类型 {type(v)} 不被 Chroma 接受"
+        )
+    assert meta["degrade"] == json.dumps(["ocr_empty"])  # 元组 → JSON 字符串
+    assert meta["bbox"] == json.dumps([1.0, 2.0, 3.0, 4.0])
+    assert meta["kind"] == "image" and meta["page"] == 2
+    assert "image_path" not in meta  # None 的键直接省略
+
+
+def test_chunk_metadata_omits_all_none():
+    meta = chunk_metadata(_chunk())
+    assert meta == {
+        "doc_id": "d.md",
+        "kind": "text",
+        "order": 0,
+        "part": 0,
+        "table_structured": True,
+        "degrade": "[]",
+    }
