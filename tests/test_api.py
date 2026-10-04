@@ -78,3 +78,41 @@ def test_empty_paths_returns_empty_results(client):
     r = client.post("/search", json={"query": "q", "k": 5, "paths": []})
     assert r.status_code == 200
     assert r.json()["results"] == []
+
+
+# ── 来源元数据的端到端暴露（Task 9）────────────────────────────
+# 融合层不认识 store（rrf_fuse 的契约是「只做排名」），所以查表在 API 边界
+# 注入：缺省 None 时行为与改造前完全一致。
+
+
+def test_metadata_is_absent_when_lookup_not_supplied():
+    """缺省 None 时响应体里连字段都不该出现（不是 null）"""
+    app = create_app(make_retriever())
+    r = TestClient(app).post("/search", json={"query": "q", "k": 3})
+    assert r.status_code == 200
+    assert "doc_id" not in r.json()["results"][0]
+
+
+def test_metadata_is_returned_when_lookup_supplied():
+    def lookup(chunk_id):
+        return {
+            "doc_id": "d.md", "kind": "table", "page": 3, "order": 7,
+            "part": 1, "bbox": [1.0, 2.0, 3.0, 4.0],
+            "image_ref": "http://x/y.png", "image_path": None,
+            "table_structured": False, "degrade": ["table_unstructured"],
+        }
+
+    app = create_app(make_retriever(), meta_lookup=lookup)
+    item = TestClient(app).post("/search", json={"query": "q", "k": 3}).json()["results"][0]
+    assert item["doc_id"] == "d.md" and item["kind"] == "table"
+    assert item["page"] == 3 and item["order"] == 7 and item["part"] == 1
+    assert item["bbox"] == [1.0, 2.0, 3.0, 4.0]
+    assert item["degrade"] == ["table_unstructured"]
+    assert item["table_structured"] is False
+
+
+def test_lookup_returning_none_does_not_crash():
+    """chunk 不在回源表里（例如索引与元数据不同步）时不能 500"""
+    app = create_app(make_retriever(), meta_lookup=lambda cid: None)
+    r = TestClient(app).post("/search", json={"query": "q", "k": 3})
+    assert r.status_code == 200
