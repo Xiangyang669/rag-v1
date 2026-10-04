@@ -35,15 +35,26 @@ def build_corpus(
     corpus_dir: str | Path,
     index_dir: str | Path,
     embed_fn: EmbedFn | None = None,
+    *,
+    ocr=None,
+    vlm=None,
+    fetcher=None,
+    cfg=None,
 ) -> int:
     """把 corpus_dir 下的文档入库，返回写入的块数。
 
     建三路索引：向量 / 全文 / 图谱。
     embed_fn 可注入：测试传确定性假向量，生产传 None 走真实 API。
+
+    ocr / vlm 是图片双通道的引擎，缺省表示**不做图片解析**（图片按正文处理）。
+    必须真的透传到 load_document——否则「从入库入口进来图片永不处理，
+    而每个模块自己的测试还是绿的」，又是一处集成缺口。
     """
     corpus_dir = Path(corpus_dir)
     index_dir = Path(index_dir)
     index_dir.mkdir(parents=True, exist_ok=True)
+
+    engine_kwargs = {"ocr": ocr, "vlm": vlm, "fetcher": fetcher, "cfg": cfg}
 
     all_chunks: list[Chunk] = []
     # rglob("*") 会连目录一起命中，先过滤掉——否则名字里带 .md 的目录会在
@@ -51,7 +62,9 @@ def build_corpus(
     for path in sorted(p for p in corpus_dir.rglob("*") if p.is_file()):
         doc_id = path.relative_to(corpus_dir).as_posix()
         all_chunks.extend(
-            chunk_elements(load_document(path, doc_id), doc_id, MAX_CHARS)
+            chunk_elements(
+                load_document(path, doc_id, **engine_kwargs), doc_id, MAX_CHARS
+            )
         )
 
     if not all_chunks:

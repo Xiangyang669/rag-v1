@@ -61,3 +61,27 @@ def test_build_skips_unknown_suffixes(tmp_path):
     (corpus / "b.json").write_text('{"x": 1}', encoding="utf-8")
 
     assert build_corpus(corpus, tmp_path / "idx", embed_fn=fake_embed) == 1
+
+
+def test_build_corpus_runs_image_channels_when_engines_given(tmp_path):
+    """给了引擎就得真的用上——否则「从 build_corpus 进来图片永不处理」，
+    而每个模块自己的测试还是绿的。这类集成缺口要防。
+    """
+    from ragv1.ingest.ocr import OcrResult
+
+    class _Ocr:
+        def extract(self, image):
+            return OcrResult("图里的字：服务状态正常", 0.9, ())
+
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "a.png").write_bytes(b"\x89PNG\r\n\x1a\nbody")
+    (corpus / "a.md").write_text("# H\n\n![示意图](a.png)\n", encoding="utf-8")
+
+    build_corpus(corpus, tmp_path / "idx", embed_fn=fake_embed, ocr=_Ocr())
+
+    store = FtsStore(tmp_path / "idx" / "kb.db")
+    image_ids = [c for c in store.chunk_ids() if store.meta_of(c)["kind"] == "image"]
+    assert image_ids, "给了 OCR 引擎却没有产出图片块"
+    assert "服务状态正常" in store.text_of(image_ids[0])
+    assert store.meta_of(image_ids[0])["image_ref"] == "a.png"
