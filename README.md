@@ -24,10 +24,23 @@ query ──┼─→ 全文检索（SQLite FTS5 bm25）   ─┼─→ RRF 融�
 
 | 指标 | 值 |
 |---|---|
-| 产出块数 | 1993 |
+| 产出块数 | **2050**（1923 正文 + **127 表格**） |
 | 超出长度上限的节 | **11.5%**（据此设计 OVER_CAP 分组再切） |
 | 三路并行调度 | **0.209s**（串行需 0.60s）→ **2.87× 加速** |
-| 自动化测试 | **107 个，全绿** |
+| 自动化测试 | **149 个，全绿** |
+
+表格入库实测（`py scripts/verify_tables.py`）：
+
+| 指标 | 值 |
+|---|---|
+| 表格张数 | **117**（其中 **10 张**超 1200 字符被切成多块） |
+| 表格块数 | 127（每块都带表头） |
+| 表格数据行 | 616 行，**无一行为切断** |
+| 最长表格块 | 1198 字符（≤ MAX_CHARS） |
+
+> ⚠️ 早期版本里「表格 152 张」的说法是**朴素 grep** 的结果：它把代码围栏里的
+> `|` 行（实测 62 处）和第 2 行不是分隔行的伪表也算成了表格。围栏感知后的
+> 真实张数是 **117**，上表以此为准。
 
 ## 关键设计取舍
 
@@ -47,13 +60,19 @@ query ──┼─→ 全文检索（SQLite FTS5 bm25）   ─┼─→ RRF 融�
 ### 数据流 A · 入库（离线）
 
 ```
-技术文档 → parser → chunker → tokenizer
+技术文档 → loader → elements（Element 中间表示 → 分块）→ tokenizer
                       ├─→ 向量支线：embedding → Chroma
                       ├─→ 全文支线：分词 → SQLite FTS5
                       └─→ 图谱支线：结构抽取 → SQLite nodes/edges + 内存图
 ```
 
-parser / chunker / tokenizer 是三条路**共用**的前置，只在写入时分开——否则同一个块在三路里边界不一致，融合时对不上。
+loader / elements / tokenizer 是三条路**共用**的前置，只在写入时分开——否则同一个块在三路里边界不一致，融合时对不上。
+
+`loader` 把文档拆成有序的 **Element**（正文段 / 表格 / 后续还会有图片），
+`elements` 再切块。表格因此是**独立 chunk**，不走正文那条「按段落贪心、超限
+按字符硬切」的路径——大表按「表头 + 若干行」切，**每块都重复表头**，宁可让
+单行超限也不切断它。每个 chunk 还带来源元数据（文档名 / 页码 / 位置 / 原图引用），
+由 `FtsStore.meta_of` 回源、经 `create_app(meta_lookup=...)` 暴露到 API。
 
 ### 数据流 B · 在线检索
 
@@ -63,7 +82,7 @@ parser / chunker / tokenizer 是三条路**共用**的前置，只在写入时�
 
 ```bash
 pip install -r requirements.txt
-pytest                                    # 107 个测试
+py -m pytest                              # 149 个测试
 ```
 
 真实索引需要 embedding API（SiliconFlow `BAAI/bge-m3`）。把 key 放进项目根的 `.env`：
@@ -86,7 +105,7 @@ print(build_corpus(CORPUS_DIR, INDEX_DIR))   # 返回写入的块数
 
 ```
 ragv1/
-├── ingest/        解析 · 分块 · 超长块再切 · 结构抽取 · 入库编排
+├── ingest/        loader（版面分析→Element）· 表格解析 · 分块 · 结构抽取 · 入库编排
 ├── store/         向量（Chroma）· 全文（FTS5）· 图谱（SQLite + NetworkX）
 ├── retrieve/      三路检索器 + 独立开关
 ├── fusion/        RRF 融合
@@ -107,7 +126,9 @@ ragv1/
 ## 测试
 
 ```bash
-pytest -q      # 107 passed
+py -m pytest -q      # 149 passed
 ```
 
-测试覆盖的边界包括：空查询、YAML frontmatter、无标题文档、三路全空、中文分词静默失效、超长节、单路故障降级、Langfuse 无 key 时 no-op。全程 TDD，每个测试都先看着它失败。
+测试覆盖的边界包括：空查询、YAML frontmatter、无标题文档、三路全空、中文分词静默失效、超长节、单路故障降级、Langfuse 无 key 时 no-op；以及表格相关的——代码围栏里的 `|` 行、列数不一致的畸形表、零数据行的空表、单元格内的转义竖线、单行超预算不切断。全程 TDD，每个测试都先看着它失败。
+
+其中一条是**回归护栏**：不含表格/图片的文档，走新链路的产出与改造前**逐字节一致**（`tests/test_elements.py::test_pure_text_output_is_byte_identical_to_old_pipeline`）。

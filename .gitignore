@@ -16,8 +16,14 @@ venv/
 *.sqlite
 *.sqlite3
 
+# 验收脚本生成的报告
+verify_report.txt
+
 # 测试缓存
 .pytest_cache/
+
+# 计划执行脚手架（superpowers SDD 工作区，临时）
+.superpowers/
 
 # IDE / OS
 .idea/
