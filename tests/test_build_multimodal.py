@@ -34,10 +34,14 @@ def test_build_indexes_table_doc_end_to_end(tmp_path):
 
     for cid in table_ids:
         lines = store.text_of(cid).splitlines()
-        # 块文本 = heading 前缀 + 表头行 + 分隔行 + 数据行
-        # 列数因表而异，所以用「是不是表行/分隔行」判断，而不是比对具体表头文字
-        assert table.is_table_line(lines[1]), "块里没有表头行"
-        assert table.is_separator_line(lines[2]), "块里没有分隔行——表头没跟着切块"
+        # 块文本 = （可选的 heading 前缀）+ 表头行 + 分隔行 + 数据行。
+        # 前缀是可选的——Markdown 的表在标题下才有，PDF 出来的表就没有。
+        # 列数也因表而异，所以按「是不是表行/分隔行」判断，不比对具体文字。
+        sep_at = next(
+            (i for i, ln in enumerate(lines) if table.is_separator_line(ln)), None
+        )
+        assert sep_at is not None and sep_at >= 1, "块里没有分隔行——表头没跟着切块"
+        assert table.is_table_line(lines[sep_at - 1]), "分隔行前面不是表头行"
 
 
 def test_build_is_deterministic(tmp_path):
