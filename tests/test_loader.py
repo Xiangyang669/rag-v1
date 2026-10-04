@@ -6,7 +6,9 @@
 
 from pathlib import Path
 
+from ragv1.ingest import degrade
 from ragv1.ingest.loader import load_document, markdown_elements
+from ragv1.ingest.ocr import OcrResult
 
 
 def test_headings_set_heading_path_and_text_is_split_at_table():
@@ -67,3 +69,66 @@ def test_load_document_unknown_suffix_returns_empty(tmp_path: Path):
     p = tmp_path / "a.json"
     p.write_text("{}", encoding="utf-8")
     assert load_document(p, doc_id="a.json") == []
+
+
+# ─────────────────────────────────────────────────────────────
+# 图片元素（阶段二 Task 6）
+# ─────────────────────────────────────────────────────────────
+
+# OCR 抽到的字数必须过 OCR_MIN_CHARS（默认 10），否则会被判成「没料」
+_OCR_TEXT = "图里的字：服务状态正常"
+
+
+class _Ocr:
+    def extract(self, image):
+        return OcrResult(_OCR_TEXT, 0.9, (_OCR_TEXT,))
+
+
+def _with_ocr(md, tmp_path):
+    return markdown_elements(
+        md, doc_id="d.md", ocr=_Ocr(), base_dir=tmp_path, cache_dir=tmp_path / "c"
+    )
+
+
+def test_image_line_becomes_image_element(tmp_path):
+    (tmp_path / "a.png").write_bytes(b"\x89PNG\r\n\x1a\nbody")
+    md = "# H\n\n前段。\n\n![示意图](a.png)\n\n后段。\n"
+
+    els = _with_ocr(md, tmp_path)
+
+    assert [e.kind for e in els] == ["text", "image", "text"]
+    assert _OCR_TEXT in els[1].text
+    assert els[1].image_ref == "a.png"
+    assert [e.order for e in els] == [0, 1, 2]
+
+
+def test_image_inside_code_fence_is_not_an_image(tmp_path):
+    """代码块里的 ![..](..) 是示例代码，不是图片"""
+    md = "# H\n\n```md\n![x](y.png)\n```\n"
+    els = _with_ocr(md, tmp_path)
+    assert [e.kind for e in els] == ["text"]
+    assert "![x](y.png)" in els[0].text
+
+
+def test_inline_image_stays_in_text(tmp_path):
+    """spec §6.1：行内图片不拆开，保留上下文"""
+    md = "# H\n\n前面文字 ![x](y.png) 后面文字\n"
+    els = _with_ocr(md, tmp_path)
+    assert [e.kind for e in els] == ["text"]
+    assert "![x](y.png)" in els[0].text
+
+
+def test_reference_style_image_degrades_and_stays_in_text(tmp_path):
+    """引用式图片要查文末定义表，本期不解析——保留原文并落码，不丢"""
+    md = "# H\n\n![x][id]\n\n[id]: y.png\n"
+    els = _with_ocr(md, tmp_path)
+    assert [e.kind for e in els] == ["text"]
+    assert degrade.IMAGE_REF_UNRESOLVED in els[0].degrade
+
+
+def test_no_engines_configured_keeps_phase1_behavior(tmp_path):
+    """不传 ocr/vlm 时，图片行仍是普通正文（含原始标记）—— 阶段一测试因此不受影响"""
+    md = "# H\n\n![示意图](a.png)\n"
+    els = markdown_elements(md, doc_id="d.md")
+    assert [e.kind for e in els] == ["text"]
+    assert "![示意图](a.png)" in els[0].text
