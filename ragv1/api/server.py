@@ -62,22 +62,42 @@ def _chunks_by_id(fts: FtsStore) -> dict[str, Chunk]:
     return out
 
 
-def build_app(idx: str | Path | None = None, embed_fn=None):
-    """装配：索引目录 → 三路 store → Retriever → FastAPI app。
+def _open(idx: Path, embed_fn=None) -> tuple[Retriever, FtsStore]:
+    """索引目录 → (Retriever, FtsStore)。
 
-    `embed_fn` 可注入（与 `build_corpus` 同一约定）：生产传 None 走真实 API，
-    测试传确定性假向量——否则这条装配路径**没法在离线环境被测试**。
+    ⚠️ 回源表（FtsStore）单独返回：它既是 meta_lookup 的来源，也是评估脚本
+    取候选块原文的地方——只给 retriever 就没法在别处复用。
     """
-    idx = Path(idx) if idx is not None else index_dir()
-    if not idx.is_dir():
-        raise SystemExit(f"索引目录不存在：{idx}\n先跑 `py scripts/build_index.py`")
-
     fts = FtsStore(idx / FTS_DB)
     retriever = Retriever(
         VectorRetriever(VectorStore(idx / VECTOR_DIR, embed_fn=embed_fn)),
         FtsRetriever(fts),
         GraphRetriever(GraphStore(idx / GRAPH_DB), _chunks_by_id(fts)),
     )
+    return retriever, fts
+
+
+def _resolve(idx: str | Path | None) -> Path:
+    resolved = Path(idx) if idx is not None else index_dir()
+    if not resolved.is_dir():
+        raise SystemExit(
+            f"索引目录不存在：{resolved}\n先跑 `py scripts/build_index.py`"
+        )
+    return resolved
+
+
+def build_retriever(idx: str | Path | None = None, embed_fn=None):
+    """只装配三路检索器（不起服务）。评估 / 压测脚本用它。
+
+    `embed_fn` 可注入（与 `build_corpus` 同一约定）：生产传 None 走真实 API，
+    测试传确定性假向量——否则这条装配路径**没法在离线环境被测试**。
+    """
+    return _open(_resolve(idx), embed_fn)[0]
+
+
+def build_app(idx: str | Path | None = None, embed_fn=None):
+    """装配：索引目录 → 三路 store → Retriever → FastAPI app。"""
+    retriever, fts = _open(_resolve(idx), embed_fn)
     # meta_lookup 走 FtsStore —— 查表发生在 API 边界，融合层不认识 store
     return create_app(retriever, meta_lookup=fts.meta_of)
 
