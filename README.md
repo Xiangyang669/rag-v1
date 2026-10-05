@@ -27,7 +27,7 @@ query ──┼─→ 全文检索（SQLite FTS5 bm25）   ─┼─→ RRF 融�
 | 产出块数 | **2256**（1945 正文 + **127 表格** + **184 图片**） |
 | 超出长度上限的节 | **11.5%**（据此设计 OVER_CAP 分组再切） |
 | 三路并行调度 | **0.209s**（串行需 0.60s）→ **2.87× 加速** |
-| 自动化测试 | **223 个**（另有 3 条需要真实引擎的 smoke 默认跳过） |
+| 自动化测试 | **231 个**（另有 3 条需要真实引擎的 smoke 默认跳过） |
 
 入库实测（`py scripts/verify_ingest.py`）：
 
@@ -111,25 +111,74 @@ loader / elements / tokenizer 是三条路**共用**的前置，只在写入时�
 
 ```bash
 pip install -r requirements.txt
-py -m pytest                              # 223 个测试（默认跳过需要真实引擎的 smoke）
+py -m pytest                              # 231 个测试（默认跳过需要真实引擎的 smoke）
 py -m pytest -m smoke -v -s               # 真跑 OCR / 多模态，打印实测输出
 ```
 
-真实索引需要 embedding API（SiliconFlow `BAAI/bge-m3`）。把 key 放进项目根的 `.env`：
+真实索引需要 embedding API（SiliconFlow `BAAI/bge-m3`）。把 key 放进项目根的 `.env`（也支持上层 `practice/.env`）：
 
 ```
 SILICONFLOW_API_KEY=sk-...
 ```
 
-然后：
+**① 建索引**（走真 embedding；语料路径默认取 `config.CORPUS_DIR`）：
 
-```python
-from pathlib import Path
-from ragv1.config import CORPUS_DIR, INDEX_DIR
-from ragv1.ingest.build import build_corpus
-
-print(build_corpus(CORPUS_DIR, INDEX_DIR))   # 返回写入的块数
+```bash
+py scripts/build_index.py                 # 落盘 .indexes/kb/，打印块数 / 耗时 / API 调用次数
+py scripts/build_index.py --with-images   # 带图片双通道（取图 40-68s/张，很慢）
 ```
+
+**② 起服务**（本地）：
+
+```bash
+py -m ragv1.api.server                    # http://127.0.0.1:8000/docs
+```
+
+**③ 起服务**（Docker，同一份镜像服务任意索引）：
+
+```bash
+docker compose up --build -d              # http://127.0.0.1:8000
+```
+
+> ⚠️ 两个部署坑，都是实测踩出来的：
+> ① compose 里挂索引的卷**必须可写**——Chroma 的 `PersistentClient` **即使只读查询也要写 sqlite**，挂 `:ro` 会抛 `attempt to write a readonly database`。
+> ② 容器里要**显式把 Langfuse key 留空**——否则压测会夹带外部埋点的网络延迟，数字不可复现。
+
+## 部署与实测性能
+
+**测法**：`docker compose up`（Docker Desktop / WSL2，Windows 10），脚本 `scripts/bench.py`
+发 300 个请求（10 条真实 query 轮转），并发 10、预热 10。
+
+| 场景 | P50 | P95 | P99 | QPS |
+|---|---|---|---|---|
+| **全三路**（含 1 次 embedding 往返） | 346 ms | **556 ms** | 783 ms | 26.6 |
+| **纯本地**（关向量路，0 次外部调用） | 224 ms | 276 ms | 308 ms | 43.8 |
+| 纯本地 · 并发 1 | 26 ms | 56 ms | — | 28.8 |
+
+**四个面试要的数字**：
+
+| 数字 | 值 |
+|---|---|
+| **P95 延迟** | **556 ms**（全三路，并发 10）。拆开看：**纯本地检索只要 26 ms**（并发 1），其余全是 embedding API 的一次网络往返 |
+| **QPS** | **~44**（天花板。并发 10 与 20 都是 43-44，**吞吐不再涨、延迟线性变长**） |
+| **一次查询的外部调用** | **1 次 embedding + 0 次 LLM** |
+| **一次查询的 token** | **8.1 token**（10 条 query 共 81；`scripts/bench.py --token-probe` 实测） |
+
+> 💡 **「一次链路几次 LLM 调用」的答案是 0** —— rag-v1 是**检索内核**，不调 LLM；一次查询只在
+> 向量路把 query 编码成向量（1 次 embedding 往返），融合 / 全文 / 图谱全在本机。
+> **把大模型留给回答层，这是分层取舍。** 带 LLM 的完整链路在另一个项目。
+
+### 已定位的瓶颈：库层的全局锁，把吞吐钉死在 ~44 QPS
+
+并发 1 → 10 → 20 时，**QPS 停在 43-44 不动，P50 却从 26 ms 涨到 224 ms 再到 454 ms**
+——**吞吐不涨、延迟随并发线性变长**，是存在全局串行点的典型特征。
+
+根因在 `store/fts_store.py:65` 与 `store/graph_store.py:31`：两者各持**一条 sqlite 连接 +
+一把 `threading.Lock`**（`check_same_thread=False` 的标准写法），**每个查询都要过这把锁**
+→ 全文路与图谱路的查询被完全串行化。
+
+方向（未做）：单连接换连接池（每线程一条），或对只读查询放开锁。
+**在 107 篇 / 2050 块的规模下它不是瓶颈，但它是这套架构上生产要迈的第一道坎。**
 
 ## 目录
 
@@ -142,7 +191,7 @@ ragv1/
 ├── fusion/        RRF 融合
 ├── orchestration/ LangGraph Supervisor（并行调度 + 降级 + 埋点）
 ├── evaluation/    A/B/C/D 四类问题自动生成 · 分层指标 harness · 验收报告
-├── api/           FastAPI 端点
+├── api/           FastAPI 端点 · 生产装配（server.py：store → retriever → app）
 └── observability.py  Langfuse 埋点（无 key 时 no-op）
 ```
 
@@ -156,12 +205,14 @@ ragv1/
 - **图片解析依赖网络**：语料里的图是远程 URL，实测本机到 `raw.githubusercontent.com` 每次取图要 40-68 秒且常失败——取不到就落 `image_fetch_failed` 并继续，不会中断入库
 - **扫描版 PDF 的 OCR 质量取决于渲染分辨率**，没有做倾斜校正/去噪
 - **语料目录在 `config.py` 里写死**为开发时使用的路径
-- **无鉴权、无部署**（V1 定位是本地验证版）
+- **无鉴权**：`/search` 裸奔，没有任何鉴权/限流（V1 定位是本地验证版）
+- **检索层无 LLM**：本服务只做检索，不生成回答；拒答/引用溯源也不在这一层
+- **并发天花板 ~44 QPS**：库层的全局锁所致，见「部署与实测性能」末节
 
 ## 测试
 
 ```bash
-py -m pytest -q              # 223 passed（默认跳过 smoke）
+py -m pytest -q              # 231 passed（默认跳过 smoke）
 py -m pytest -m smoke -v -s  # 真跑 OCR / 多模态，打印实测输出
 ```
 

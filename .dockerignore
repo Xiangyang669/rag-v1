@@ -1,0 +1,22 @@
+# 数据与密钥（绝不进镜像）
+.indexes/
+.env
+.env.local
+*.db
+*.sqlite
+*.sqlite3
+
+# 开发产物
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.superpowers/
+verify_report.txt
+
+# 不需要进镜像的目录
+tests/
+docs/
+.git/
+.idea/
+.vscode/

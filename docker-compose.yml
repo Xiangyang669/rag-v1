@@ -1,0 +1,38 @@
+# 本地起服务：docker compose up --build
+#
+# 前置：先在宿主机把索引真跑出来（需要 SILICONFLOW_API_KEY，会消耗额度）
+#     py scripts/build_index.py
+#
+# ⚠️ 索引与语料都不在镜像里，靠下面两个卷挂进去。所以镜像本身是"无数据"的，
+#    同一份镜像可以服务任意索引。
+services:
+  rag-v1:
+    build: .
+    image: rag-v1:local
+    ports:
+      - "8000:8000"
+    environment:
+      # 查询侧要真算 embedding（query → 向量）——key 从宿主机的 .env 传入，
+      # 不打进镜像。compose 会自动读同目录的 .env。
+      - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY}
+      - RAGV1_INDEX_DIR=/data/index
+      # ⚠️ 显式留空 = 关掉 Langfuse 埋点（observability 缺 key 时走 no-op）。
+      #    压测要的是**确定性的本机延迟**，不能让外部埋点影响数字。
+      - LANGFUSE_PUBLIC_KEY=
+      - LANGFUSE_SECRET_KEY=
+    volumes:
+      # 预建好的索引目录。
+      # ⚠️ 必须**可写**：Chroma 的 PersistentClient 即使只读查询，打开索引时
+      #    也要写 sqlite（实测 `:ro` 直接抛 `attempt to write a readonly database`）。
+      #    所以这里不能加 `:ro`——实测踩过。
+      - ./.indexes/kb:/data/index
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/docs',timeout=2)"
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
