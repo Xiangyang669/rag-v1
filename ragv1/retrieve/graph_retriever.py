@@ -13,6 +13,7 @@
 
 import re
 
+from ragv1 import config
 from ragv1.store.graph_store import GraphStore
 from ragv1.types import Chunk, Hit
 
@@ -22,18 +23,41 @@ from ragv1.types import Chunk, Hit
 _DROP = re.compile(r"[^\w.\-]+")
 _SPACE = re.compile(r"\s+")
 
+# 连续 CJK 段（与 ragv1/text/tokenize.py 同一区间 U+4E00–U+9FFF）。
+_CJK_RUN = re.compile(r"[一-鿿]+")
+
 
 def _normalize(text: str) -> str:
     return _SPACE.sub(" ", _DROP.sub(" ", text.lower())).strip()
 
 
-def _contains_phrase(haystack: str, needle: str) -> bool:
-    """needle 是否作为**独立词序列**出现在 haystack 里。
+def _cjk_runs(text: str) -> list[str]:
+    """提取字符串里的**连续 CJK 段**（保序，不含空段）。
 
-    两侧补空格做词边界，避免 `url` 匹配上 `curling` 这种词内出现。
+    中文标题普遍带编号前缀，如 `(2)前端错误` 规范化后是 `2 前端错误`——
+    整条子串匹配会被 `2 ` 这个前缀挡掉；而连续 CJK 段得到 `前端错误`，
+    编号前缀不含 CJK，天然被跳过。
+    """
+    return _CJK_RUN.findall(text)
+
+
+def _contains_phrase(haystack: str, needle: str) -> bool:
+    """needle 是否出现在 haystack 里。
+
+    分两条路径，按 needle 里**是否含够长的连续 CJK 段**分流：
+
+    - 含（≥ `config.MIN_CJK_RUN` 字的连续 CJK 段）→ 中文子串路径：任一段
+      作为子串出现在 haystack 里即命中。中文按字连写、无词间空格，空格
+      词边界会让「用户把标题一字不差说出来」也匹配不到——这条路径修的就是它。
+    - 不含（纯 ASCII 别名，或 CJK 段都太短）→ 逐字节沿用既有的空格词边界，
+      避免 `url` 匹配上 `curling` 这种词内出现，也保住 `requests 模块`
+      这类「ASCII 段 + 短 CJK 段」混合别名的整串匹配。
     """
     if not needle:
         return False
+    runs = [r for r in _cjk_runs(needle) if len(r) >= config.MIN_CJK_RUN]
+    if runs:
+        return any(run in haystack for run in runs)
     return f" {needle} " in f" {haystack} "
 
 
