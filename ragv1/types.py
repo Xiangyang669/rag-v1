@@ -104,3 +104,11 @@ class FusedHit:
     rrf_score: float
     sources: tuple[str, ...]
     rank: int  # 1-based
+
+
+@dataclass(frozen=True)
+class Turn:
+    """多轮对话中的一轮。role 取 "user" | "assistant"。"""
+
+    role: str
+    text: str
