@@ -28,9 +28,17 @@ MAX_CHARS = 1200
 RRF_K = 60
 
 # ── V2 查询自适应权重（任务 6）──────────────────────────────
-# 静态融合权重初值：调研查到的企业三信号示例，**必须在 dev 集上重调**（任务 8）。
+# 静态融合权重：任务 8 在**本项目 dev 集**（`zh_dev.jsonl`，排除 unanswerable 后
+# 18 条）上网格搜索定档——vector/fulltext 轴步长 0.05、graph = 1 − v − f ≥ 0。
 # 键即「路名」，与 rrf_fuse 的 weights 同一套语义（缺失按 1.0，≤ 0 视为不参与）。
-STATIC_FUSION_WEIGHTS = {"vector": 0.50, "fulltext": 0.35, "graph": 0.15}
+#
+# ⚠️ 全局最优落在**角点** {vector:1, fulltext:0, graph:0}（dev recall@5 = 0.796，
+# 恰等于纯向量路）——那是"关掉两路"而非融合。作为 route_weights 的基线，三路都
+# 必须留有非零权重（否则 boost 乘 0 永远救不活被压成 0 的路），故取三路均 ≥ 0.05
+# 的最优 {0.85, 0.05, 0.10}（dev recall@5 = 0.741、MRR = 0.700）。
+# ⚠️ 即便如此，融合 recall@5（0.741）仍**低于**最强单路 vector（0.796）——加权
+# 并未翻盘。完整数字与归因见 `.superpowers/.../task-8-report.md`。
+STATIC_FUSION_WEIGHTS = {"vector": 0.85, "fulltext": 0.05, "graph": 0.10}
 
 # 改写变体的折扣（双路检索时压低改写路，避免它带偏）。
 REWRITE_WEIGHT_DISCOUNT = 0.5
