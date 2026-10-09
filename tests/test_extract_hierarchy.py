@@ -93,3 +93,32 @@ def test_parameters_do_not_appear_in_belongs_to_edges():
     assert "timeout" not in nodes
     # parameter 只以 has_parameter 的 dst 出现，不被层级边劫持
     assert all(r.kind == "has_parameter" for r in rels if "timeout" in (r.src, r.dst))
+
+
+def test_identifiers_do_not_appear_in_belongs_to_edges():
+    """上个任务用 parameter 代打的那条断言——这里是真正的 identifier 版本。
+
+    identifier 来自正文，不是标题层级；混进 `belongs_to` 会让后续标题拿它
+    做命名限定，整条 section 树被污染。断言必须**真的能失败**：先钉住确实
+    抽到了标识符、且确实产出了层级边（否则断言在空转）。
+    """
+    chunks = [
+        Chunk(
+            "c1",
+            "d",
+            ("配置", "环境变量"),
+            "设 MULTIPLE_DATA_TO_BASE64 为 true",
+        )
+    ]
+    entities, rels = extract(chunks)
+    ids = {e.canonical for e in entities if e.kind == "identifier"}
+    assert ids == {"MULTIPLE_DATA_TO_BASE64"}, "前提：应当恰好抽出一个标识符"
+
+    belongs = [r for r in rels if r.kind == "belongs_to"]
+    endpoints = {r.src for r in belongs} | {r.dst for r in belongs}
+    assert endpoints == {"配置", "环境变量"}, "前提：层级边必须存在，否则断言空转"
+    assert endpoints & ids == set()
+    # 标识符只以 mentioned_in 的 src 出现，不被层级边劫持
+    assert all(
+        r.kind == "mentioned_in" for r in rels if "MULTIPLE_DATA_TO_BASE64" in (r.src, r.dst)
+    )
