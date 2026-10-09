@@ -60,3 +60,24 @@ def test_only_requested_paths_are_scheduled():
     assert fakes["vector"].calls == 0
     assert fakes["fulltext"].calls == 0
     assert fakes["graph"].calls == 1
+
+
+# ── V2：融合节点接入查询自适应权重（任务 7）──────────────────────────
+
+def test_fuse_node_records_route_weights(monkeypatch):
+    """融合节点必须把路由权重写回 state —— 这是调参时唯一的观测点。"""
+    from ragv1.orchestration import supervisor
+    out = supervisor._fuse_node({
+        "query": "MAX_EMBED_BATCH 是多少",
+        "ranked": {"fulltext": [Hit(chunk_id="a", rank=1, score=-9.0, path="fulltext")],
+                   "vector": [Hit(chunk_id="b", rank=1, score=0.9, path="vector")]},
+        "on_error": "skip",
+    })
+    assert out["weights"]["fulltext"] > 0
+    assert len(out["fused"]) == 2
+
+
+def test_fuse_node_with_empty_ranked_returns_empty():
+    from ragv1.orchestration import supervisor
+    out = supervisor._fuse_node({"query": "q", "ranked": {}, "on_error": "skip"})
+    assert out["fused"] == []

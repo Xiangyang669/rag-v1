@@ -15,6 +15,7 @@ from typing import Annotated, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from ragv1 import observability
+from ragv1.fusion.router import route_weights
 from ragv1.fusion.rrf import rrf_fuse
 from ragv1.retrieve import ALL_PATHS, PATH_FULLTEXT, PATH_GRAPH, PATH_VECTOR
 from ragv1.types import FusedHit, Hit
@@ -42,8 +43,12 @@ class State(TypedDict):
     query: str
     k: int
     on_error: str
+    # ranked / degraded 由三路并行扇出、各写自己的键 → 需要 _merge_dict 归约。
     ranked: Annotated[dict[str, list[Hit]], _merge_dict]
     degraded: Annotated[dict[str, str], _merge_dict]
+    # weights 只由融合节点这一个写入者产出（与 fused 同理），无并行写入者
+    # → 不带归约器；带了反而是在暗示不存在的并行写。
+    weights: dict[str, float]
     fused: list[FusedHit]
 
 
@@ -70,8 +75,14 @@ def _retrieval_node(retriever, path: str, tracer=None):
 
 
 def _fuse_node(state: State) -> dict:
-    """归一化 + 融合。这是三路汇合后的唯一出口。"""
-    return {"fused": rrf_fuse(state["ranked"])}
+    """归一化 + 融合。这是三路汇合后的唯一出口。
+
+    融合前先按查询特征与全文路分数形态定权（`router.route_weights`，纯规则、
+    零 LLM、零网络），再把权重连同结果写回 state —— 权重是调参时唯一的观测点。
+    只算权重不写回，事后就无法解释「这次为什么是这个排序」。
+    """
+    weights = route_weights(state["query"], state["ranked"])
+    return {"fused": rrf_fuse(state["ranked"], weights=weights), "weights": weights}
 
 
 def build_graph(retriever, paths, tracer=None):
