@@ -35,7 +35,7 @@ class Entity:
 class Relation:
     src: str
     dst: str
-    kind: str  # has_parameter
+    kind: str  # has_parameter | belongs_to
 
 
 def _bare(name: str) -> str:
@@ -110,7 +110,13 @@ def _heading_entities(head: str, parent: str | None) -> tuple[list[Entity], list
 
 
 def _chunk_graph(chunk: Chunk) -> tuple[list[Entity], list[Relation]]:
-    """把一块的整条 heading path 转成实体与关系。"""
+    """把一块的整条 heading path 转成实体与关系。
+
+    相邻两层 heading 之间产出一条 `belongs_to`（子 → 父）。src/dst 都用
+    **该标题实体的 canonical**——与下面 `parent` 变量同一套取值——因此签名
+    标题（`get(timeout=None)` → `Config.get`）会挂到它的限定名上，而不是
+    字面标题，边与 section 树保持同构。顶层（`parent is None`）不产边。
+    """
     entities: list[Entity] = []
     relations: list[Relation] = []
     parent: str | None = None
@@ -120,6 +126,8 @@ def _chunk_graph(chunk: Chunk) -> tuple[list[Entity], list[Relation]]:
         relations.extend(rels)
         for e in ents:
             if e.kind in _STRUCTURAL_KINDS:
+                if parent is not None:
+                    relations.append(Relation(src=e.canonical, dst=parent, kind="belongs_to"))
                 parent = e.canonical
     return entities, relations
 
