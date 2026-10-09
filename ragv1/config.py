@@ -13,6 +13,14 @@ CORPUS_DIR = Path("C:/Users/lenovo/OneDrive/Desktop/ragflow-main/docs")
 # 索引落盘目录：项目根下的 .indexes/（已在 .gitignore 中忽略）
 INDEX_DIR = Path(__file__).resolve().parent.parent / ".indexes"
 
+# ── V2 中文主语料 ────────────────────────────────────────────
+# 与英文基准**分属两套索引，互不覆盖**：V1 的回归基线依赖 .indexes/kb，
+# 中文索引必须另立目录，否则重建中文语料会把基线冲掉。
+# 语料来源：FastGPT 文档仓库 document/content（中文 .mdx 已转为 .md）。
+# 换语料位置时改这里，或用 RAGV1_ZH_CORPUS 环境变量覆盖。
+ZH_CORPUS_DIR = Path(os.environ.get("RAGV1_ZH_CORPUS", "D:/corpus/fastgpt-zh"))
+ZH_INDEX_DIR = INDEX_DIR / "kb_zh"
+
 # 单块长度上限（字符数）。超过此值的节需要 OVER_CAP 再切。
 MAX_CHARS = 1200
 
