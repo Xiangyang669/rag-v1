@@ -3,7 +3,7 @@
 三路召回（向量 / 全文 / 图谱）必须输出同一种 `Hit`，融合层才只有一套逻辑。
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -98,12 +98,16 @@ class FusedHit:
 
     sources 记录它被哪几条路命中（已排序，保证可复现）——「被三路同时命中」
     本身就是一个强信号，也是对使用者的解释依据。
+
+    contributions 记每一路对这个块贡献的加权分（`w[path] / (k + rank)`），
+    供 V2 校准 / 诊断用；默认空 dict，因此既有的按位置 / 关键字构造不受影响。
     """
 
     chunk_id: str
     rrf_score: float
     sources: tuple[str, ...]
     rank: int  # 1-based
+    contributions: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

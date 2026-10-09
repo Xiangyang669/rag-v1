@@ -56,3 +56,51 @@ def test_ties_are_deterministic():
 def test_rank_field_is_filled_from_one():
     out = rrf_fuse({"vector": [Hit("a", 1, 0.9, "vector"), Hit("b", 2, 0.8, "vector")]}, k=60)
     assert [f.rank for f in out] == [1, 2]
+
+
+# ── V2：加权 RRF（任务 5）────────────────────────────────────────────
+
+def _h(cid, rank, path, score=0.0):
+    return Hit(chunk_id=cid, rank=rank, score=score, path=path)
+
+
+def test_no_weights_is_byte_identical_to_v1():
+    ranked = {"vector": [_h("a", 1, "vector"), _h("b", 2, "vector")],
+              "fulltext": [_h("b", 1, "fulltext"), _h("c", 2, "fulltext")]}
+    legacy = rrf_fuse(dict(ranked))
+    explicit_none = rrf_fuse(dict(ranked), weights=None)
+    assert [h.chunk_id for h in legacy] == [h.chunk_id for h in explicit_none]
+
+
+def test_zero_weight_path_is_excluded():
+    ranked = {"vector": [_h("a", 1, "vector")], "graph": [_h("z", 1, "graph")]}
+    ids = [h.chunk_id for h in rrf_fuse(ranked, weights={"vector": 1.0, "graph": 0.0})]
+    assert ids == ["a"]
+
+
+def test_weight_scales_contribution():
+    ranked = {"vector": [_h("a", 1, "vector")], "graph": [_h("z", 1, "graph")]}
+    top = rrf_fuse(ranked, weights={"vector": 0.9, "graph": 0.1})[0]
+    assert top.chunk_id == "a"
+
+
+def test_unknown_weight_key_is_ignored():
+    ranked = {"vector": [_h("a", 1, "vector")]}
+    assert rrf_fuse(ranked, weights={"nosuch": 99.0})[0].chunk_id == "a"
+
+
+def test_path_missing_from_weights_defaults_to_one():
+    ranked = {"vector": [_h("a", 1, "vector")], "graph": [_h("z", 1, "graph")]}
+    fused = rrf_fuse(ranked, weights={"vector": 1.0})
+    assert {h.chunk_id for h in fused} == {"a", "z"}
+
+
+def test_contributions_records_per_path_score():
+    ranked = {"vector": [_h("a", 1, "vector")]}
+    top = rrf_fuse(ranked, k=60, weights={"vector": 2.0})[0]
+    assert top.contributions == {"vector": 2.0 / 61}
+
+
+def test_tie_break_is_still_chunk_id_ascending():
+    ranked = {"vector": [_h("b", 1, "vector")], "graph": [_h("a", 1, "graph")]}
+    assert [h.chunk_id for h in rrf_fuse(ranked)] == ["a", "b"]
