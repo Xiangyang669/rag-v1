@@ -1,0 +1,22 @@
+{"question": "自己部署 FastGPT 时，root 账号的登录密码是在哪里设置的？", "answer_chunk_ids": ["06a985c8066c0c16"], "category": "fact"}
+{"question": "网页端能正常对话，但用 API 调用却报错，最可能差在哪里？", "answer_chunk_ids": ["df48d0cf35ae7ab5"], "category": "fact"}
+{"question": "知识库的向量模型换掉了，但老库还在用旧模型，为什么？", "answer_chunk_ids": ["4fc6f0f0e417e0c5"], "category": "fact"}
+{"question": "用 Ollama 接本地模型时，主机直接安装（不是 Docker）的话，代理地址里的主机 IP 能填 localhost 吗？", "answer_chunk_ids": ["bac4788a57af4bff"], "category": "fact"}
+{"question": "给知识库批量导入问答对，CSV 文件第一行的表头必须包含哪几列？", "answer_chunk_ids": ["b8d43ba82f458b21"], "category": "fact"}
+{"question": "工作流的 HTTP 节点里，想在 Body 中引用前面节点的输出变量，用什么符号包起来？", "answer_chunk_ids": ["512d8025690005b4"], "category": "fact"}
+{"question": "AI 引用知识库内容时，用户点一下引用链接能看到什么？", "answer_chunk_ids": ["64d4747dfcc65516"], "category": "fact"}
+{"question": "团队里同一个人的个人权限和部门权限冲突时，按哪个算？", "answer_chunk_ids": ["e6dff644a7131b85"], "category": "fact"}
+{"question": "上传文件时网页报 s3 upload network error，而且页面是 HTTPS，该改哪个配置？", "answer_chunk_ids": ["cf49650e18d7ee78"], "category": "fact"}
+{"question": "Agent V2 里跑 Python 分析代码用的隔离环境是什么？", "answer_chunk_ids": ["e2bf1a1917d83d6f"], "category": "fact"}
+{"question": "Milvus 做向量库时，全文检索的语言识别引擎默认是哪个？想让它更快一点该改哪个环境变量？", "answer_chunk_ids": ["d541fa8198e3c442", "fe3cad9814b9c31a"], "category": "multi_hop"}
+{"question": "从 4.17 开始 AI Proxy 成了必需依赖，如果没配 AIPROXY_API_ENDPOINT 和 AIPROXY_API_TOKEN 会怎样？", "answer_chunk_ids": ["f2449ac0ca372093", "525dd90425dbaca8"], "category": "multi_hop"}
+{"question": "图片能不能参与知识库检索？文搜图和图搜图分别依赖什么前提？", "answer_chunk_ids": ["a4265ea213e663bb", "99fbf1c795de78e7"], "category": "multi_hop"}
+{"question": "语义检索和全文检索各擅长什么？什么时候该改用混合检索？", "answer_chunk_ids": ["5c0400a5e188387a", "d541fa8198e3c442", "d22d9f97c7ca06ac"], "category": "comparison"}
+{"question": "从哪个版本起，FastGPT 的 API 文档改成自动生成、左侧手写的接口说明不再更新？", "answer_chunk_ids": ["44d5125cac14d21e"], "category": "temporal"}
+{"question": "从哪个版本开始，开源版不再读取 config.json？", "answer_chunk_ids": ["3a8fc22a89517802"], "category": "temporal"}
+{"question": "FastGPT 有官方手机 App 吗？在哪里下载？", "answer_chunk_ids": [], "category": "unanswerable"}
+{"question": "怎么给每个成员单独设置每月的 token 用量上限？", "answer_chunk_ids": [], "category": "unanswerable"}
+{"question": "怎么给知识库做定时自动备份到另一台服务器？", "answer_chunk_ids": [], "category": "unanswerable"}
+{"question": "FastGPT 支持像打电话一样的实时语音通话吗？", "answer_chunk_ids": [], "category": "unanswerable"}
+{"question": "升级完镜像之后，我改的环境变量一直没生效，该从哪查起？", "answer_chunk_ids": ["dea677160cac31ca"], "category": "multi_turn", "history": [{"role": "user", "text": "FastGPT 自部署的环境变量都在哪里配置？"}, {"role": "assistant", "text": "在 docker-compose.yml 里 fastgpt-app 的 environment 字段配置，改完要重启容器才会生效。"}]}
+{"question": "那我现在搜不到想要的内容，该从哪些参数开始调？", "answer_chunk_ids": ["fe6de92fe51fa780", "599575f309307cec"], "category": "multi_turn", "history": [{"role": "user", "text": "FastGPT 的知识库搜索大概是怎么工作的？"}, {"role": "assistant", "text": "它会把语义检索、全文检索等多路结果融合，再经过重排和过滤，把最相关的引用内容返回给模型。"}]}

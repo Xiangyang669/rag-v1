@@ -1,0 +1,22 @@
+{"question": "Milvus 版本低于 2.5.16 时，用 FastGPT 会怎样？", "answer_chunk_ids": ["6a8377547fc16959"], "category": "fact"}
+{"question": "升级后启动报 index not found（collection=modeldata_v2），是什么原因？", "answer_chunk_ids": ["3dd9b98eb4854146"], "category": "fact"}
+{"question": "调用对话接口时，模型的思考内容放在哪个字段里？", "answer_chunk_ids": ["b72de5c58d795eb5"], "category": "fact"}
+{"question": "知识库搜索的引用上限为什么用 token 数量而不是 top k 条数？", "answer_chunk_ids": ["2ba20def1cfb1b6d"], "category": "fact"}
+{"question": "想合并多个知识库的搜索结果再给一个 AI 回答，用哪个节点？", "answer_chunk_ids": ["c7a9d5cc5f539239"], "category": "fact"}
+{"question": "FastGPT 的插件打包成文件后，产物里通常包含哪些内容？", "answer_chunk_ids": ["5ebe5bfad4b5a8a6"], "category": "fact"}
+{"question": "应用发布到飞书、公众号这些第三方平台，社区版能用吗？", "answer_chunk_ids": ["c44b470ca0225a93"], "category": "fact"}
+{"question": "系统里在哪些地方能看到 API 密钥？", "answer_chunk_ids": ["2b8d454db1ad8fcf"], "category": "fact"}
+{"question": "调用应用的 chat/completions 接口时，推荐把 appId 传在哪里？", "answer_chunk_ids": ["f3921daf1a17a926"], "category": "fact"}
+{"question": "FastGPT 的全文检索默认走 MongoDB 的什么查询？", "answer_chunk_ids": ["fec2a0490292d1c1"], "category": "fact"}
+{"question": "模型开了思考但对话里不显示（4.15 之前的版本），该改哪里？", "answer_chunk_ids": ["9289dbb808cbc2c0"], "category": "fact"}
+{"question": "Milvus 迁移到 modeldata_v2 之后，旧表 modeldata 会自动删除吗？不自动删该怎么处理？", "answer_chunk_ids": ["622eec603e83d6c6", "ef870ad11944b1e8"], "category": "multi_hop"}
+{"question": "升级 FastGPT 之前为什么要先看升级说明？跨版本直接升级有什么风险？", "answer_chunk_ids": ["564b36dae9a46ecd", "bb581f2b507461cb"], "category": "multi_hop"}
+{"question": "FastGPT 一次知识库检索会依次经过哪些步骤，从问题优化到最终引用？", "answer_chunk_ids": ["a092f1e16a49fb5e", "f075da61f36d097f"], "category": "multi_hop"}
+{"question": "工作流和 Agent V2 各适合什么任务？遇到一个具体任务该怎么选？", "answer_chunk_ids": ["ad9728ef9a209aee", "ab78612789f55219", "2752c9df844f4511"], "category": "comparison"}
+{"question": "MULTIPLE_DATA_TO_BASE64 在 4.15.2 和 4.15.3 的默认值分别是多少？", "answer_chunk_ids": ["eb37925e50026d83"], "category": "temporal"}
+{"question": "系统插件从哪个版本开始不再预装，需要手动安装？", "answer_chunk_ids": ["f6e294c5fa8a6d6f"], "category": "temporal"}
+{"question": "AI 生成的内容能直接排版导出成 PDF 吗？", "answer_chunk_ids": [], "category": "unanswerable"}
+{"question": "FastGPT 支持多人同时在线协作编辑同一个应用吗？", "answer_chunk_ids": [], "category": "unanswerable"}
+{"question": "FastGPT 和 Dify 有什么区别？", "answer_chunk_ids": [], "category": "unanswerable"}
+{"question": "怎么给 FastGPT 的回答自动加上公司水印？", "answer_chunk_ids": [], "category": "unanswerable"}
+{"question": "那免登录分享链接的外部访客点这个引用，能看到完整文档吗？怎么限制？", "answer_chunk_ids": ["7899e170d9c6ce67"], "category": "multi_turn", "history": [{"role": "user", "text": "FastGPT 引用知识库内容时，用户点引用链接能看到什么？"}, {"role": "assistant", "text": "会打开一个分块阅读器浮窗，展示原文并用高亮标出引用的片段。"}]}
