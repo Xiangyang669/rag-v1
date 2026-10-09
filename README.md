@@ -160,7 +160,7 @@ loader / elements / tokenizer 是三条路**共用**的前置，只在写入时�
 - 每个 chunk 都带来源元数据（文档名 / 页码 / 阅读序号 / 位置 / 原图引用），由
   `FtsStore.meta_of` 回源、经 `create_app(meta_lookup=...)` 暴露到 API。
 
-**任何解析失败都落降级码，不静默丢弃**（14 个码，见 `ingest/degrade.py`）。
+**任何解析失败都落降级码，不静默丢弃**（15 个码，见 `ingest/degrade.py`）。
 
 ### 数据流 B · 在线检索
 
