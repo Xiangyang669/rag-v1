@@ -1,20 +1,20 @@
 {"question": "Milvus 版本低于 2.5.16 时，用 FastGPT 会怎样？", "answer_chunk_ids": ["6a8377547fc16959"], "category": "fact"}
-{"question": "升级后启动报 index not found（collection=modeldata_v2），是什么原因？", "answer_chunk_ids": ["3dd9b98eb4854146"], "category": "fact"}
-{"question": "调用对话接口时，模型的思考内容放在哪个字段里？", "answer_chunk_ids": ["b72de5c58d795eb5"], "category": "fact"}
+{"question": "我把 FastGPT 升到 4.16 以后，一启动就退出，日志提示缺了全文检索索引，这是因为什么？", "answer_chunk_ids": ["3dd9b98eb4854146"], "category": "fact"}
+{"question": "模型在回答前会先想一遍，我调接口时怎么把这部分思考过程一起取出来？", "answer_chunk_ids": ["b72de5c58d795eb5"], "category": "fact"}
 {"question": "知识库搜索的引用上限为什么用 token 数量而不是 top k 条数？", "answer_chunk_ids": ["2ba20def1cfb1b6d"], "category": "fact"}
-{"question": "想合并多个知识库的搜索结果再给一个 AI 回答，用哪个节点？", "answer_chunk_ids": ["c7a9d5cc5f539239"], "category": "fact"}
 {"question": "FastGPT 的插件打包成文件后，产物里通常包含哪些内容？", "answer_chunk_ids": ["5ebe5bfad4b5a8a6"], "category": "fact"}
-{"question": "应用发布到飞书、公众号这些第三方平台，社区版能用吗？", "answer_chunk_ids": ["c44b470ca0225a93"], "category": "fact"}
-{"question": "系统里在哪些地方能看到 API 密钥？", "answer_chunk_ids": ["2b8d454db1ad8fcf"], "category": "fact"}
-{"question": "调用应用的 chat/completions 接口时，推荐把 appId 传在哪里？", "answer_chunk_ids": ["f3921daf1a17a926"], "category": "fact"}
-{"question": "FastGPT 的全文检索默认走 MongoDB 的什么查询？", "answer_chunk_ids": ["fec2a0490292d1c1"], "category": "fact"}
-{"question": "模型开了思考但对话里不显示（4.15 之前的版本），该改哪里？", "answer_chunk_ids": ["9289dbb808cbc2c0"], "category": "fact"}
-{"question": "Milvus 迁移到 modeldata_v2 之后，旧表 modeldata 会自动删除吗？不自动删该怎么处理？", "answer_chunk_ids": ["622eec603e83d6c6", "ef870ad11944b1e8"], "category": "multi_hop"}
-{"question": "升级 FastGPT 之前为什么要先看升级说明？跨版本直接升级有什么风险？", "answer_chunk_ids": ["564b36dae9a46ecd", "bb581f2b507461cb"], "category": "multi_hop"}
-{"question": "FastGPT 一次知识库检索会依次经过哪些步骤，从问题优化到最终引用？", "answer_chunk_ids": ["a092f1e16a49fb5e", "f075da61f36d097f"], "category": "multi_hop"}
-{"question": "工作流和 Agent V2 各适合什么任务？遇到一个具体任务该怎么选？", "answer_chunk_ids": ["ad9728ef9a209aee", "ab78612789f55219", "2752c9df844f4511"], "category": "comparison"}
+{"question": "我想拿到调用接口用的密钥，应该去界面的哪个入口找？", "answer_chunk_ids": ["2b8d454db1ad8fcf"], "category": "fact"}
+{"question": "第三方应用只能配 OpenAI 风格的密钥，怎么让 FastGPT 知道要调哪个应用？", "answer_chunk_ids": ["f3921daf1a17a926"], "category": "fact"}
+{"question": "FastGPT 用 Milvus 当向量库时，全文检索还走 MongoDB 吗？改成了什么？", "answer_chunk_ids": ["fec2a0490292d1c1"], "category": "fact"}
+{"question": "Milvus 迁移到 modeldata_v2 之后，旧表 modeldata 会自动删掉吗？删不删对以后回滚有什么影响？", "answer_chunk_ids": ["622eec603e83d6c6", "ef870ad11944b1e8"], "category": "multi_hop"}
+{"question": "升级 FastGPT 之前为什么要先看升级说明？真跨版本升级该怎么操作才稳？", "answer_chunk_ids": ["564b36dae9a46ecd", "bb581f2b507461cb"], "category": "multi_hop"}
+{"question": "图片参与知识库检索有哪两种方式？不同模型配置下各支持哪些查询？", "answer_chunk_ids": ["a4265ea213e663bb", "99fbf1c795de78e7"], "category": "multi_hop"}
+{"question": "代码沙箱（Code Sandbox）和 Agent 沙箱是同一个东西吗？分别由什么服务提供？", "answer_chunk_ids": ["e000601c6fa4e9f4", "c6fae6c4c7b9c922"], "category": "comparison"}
+{"question": "Dev API 和 System OpenAPI 这两套接口文档有什么区别？", "answer_chunk_ids": ["44d5125cac14d21e"], "category": "comparison"}
+{"question": "FastGPT 全文检索在 Milvus 下和在其他向量库下，实现有什么不同？", "answer_chunk_ids": ["d541fa8198e3c442"], "category": "comparison"}
 {"question": "MULTIPLE_DATA_TO_BASE64 在 4.15.2 和 4.15.3 的默认值分别是多少？", "answer_chunk_ids": ["eb37925e50026d83"], "category": "temporal"}
-{"question": "系统插件从哪个版本开始不再预装，需要手动安装？", "answer_chunk_ids": ["f6e294c5fa8a6d6f"], "category": "temporal"}
+{"question": "以前导入知识库模板只认 CSV 文件，升级到哪个版本开始也能用 xlsx 了？", "answer_chunk_ids": ["ad5112d87cea9fe3"], "category": "temporal"}
+{"question": "现在 FastGPT 部署时，AI Proxy 这一项还能省掉吗？从什么时候开始不能省的？", "answer_chunk_ids": ["f2449ac0ca372093"], "category": "temporal"}
 {"question": "AI 生成的内容能直接排版导出成 PDF 吗？", "answer_chunk_ids": [], "category": "unanswerable"}
 {"question": "FastGPT 支持多人同时在线协作编辑同一个应用吗？", "answer_chunk_ids": [], "category": "unanswerable"}
 {"question": "FastGPT 和 Dify 有什么区别？", "answer_chunk_ids": [], "category": "unanswerable"}
