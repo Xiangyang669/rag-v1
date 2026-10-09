@@ -27,6 +27,25 @@ MAX_CHARS = 1200
 # RRF 的 k 常数（倒数排名融合）
 RRF_K = 60
 
+# ── V2 查询自适应权重（任务 6）──────────────────────────────
+# 静态融合权重初值：调研查到的企业三信号示例，**必须在 dev 集上重调**（任务 8）。
+# 键即「路名」，与 rrf_fuse 的 weights 同一套语义（缺失按 1.0，≤ 0 视为不参与）。
+STATIC_FUSION_WEIGHTS = {"vector": 0.50, "fulltext": 0.35, "graph": 0.15}
+
+# 改写变体的折扣（双路检索时压低改写路，避免它带偏）。
+REWRITE_WEIGHT_DISCOUNT = 0.5
+
+# 词面信号触发时，全文路的上调倍数 / 向量路的下调倍数。
+LEXICAL_FULLTEXT_BOOST = 1.8
+LEXICAL_VECTOR_DAMP = 0.6
+
+# 全文路「压倒性命中」的判据：median(scores) - top1 超过此值即触发。
+# ⚠️ bm25 是负值、越小越相关：故「top-1 明显强于其余」= median - top1 是一个大的**正数**。
+FULLTEXT_DOMINANCE_GAP = 3.0
+
+# 改写变体的路径名前缀/后缀标记（双路检索时改写路叫 "vector#rw" 等）。
+REWRITTEN_SUFFIX = "#rw"
+
 # ── 图片双通道 ──────────────────────────────────────────────
 # 引擎名都可从环境变量覆盖：换 OCR / 换多模态模型不该改代码。
 # 取值 "none" 表示显式禁用该通道。
